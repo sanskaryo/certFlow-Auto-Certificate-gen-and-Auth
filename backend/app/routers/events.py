@@ -18,6 +18,7 @@ from app.services.certificate_service import (
     process_certificate_generation,
     template_catalog,
 )
+from app.services.email_service import send_certificate_email
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -32,15 +33,20 @@ class ManualGenerateRequest(BaseModel):
     date_text: str = Field(..., min_length=4)
     template_id: str = Field(default="classic-blue")
     role: str = Field(default="")
+    email: str = Field(default="")
 
+
+class ParticipantEntry(BaseModel):
+    name: str
+    email: str = ""
+    role: str = ""
 
 class ManualBulkGenerateRequest(BaseModel):
-    participant_names: List[str] = Field(..., min_length=1)
+    participants: List[ParticipantEntry]
     event_name: str = Field(..., min_length=2)
     organization: str = Field(..., min_length=2)
     date_text: str = Field(..., min_length=4)
     template_id: str = Field(default="classic-blue")
-    role: str = Field(default="")
 
 
 @router.get("/templates")
@@ -57,6 +63,23 @@ async def list_events(current_user: Any = Depends(get_current_user)) -> Any:
     for evt in events:
         evt["id"] = str(evt["_id"])
     return events
+
+
+@router.get("/{event_id}", response_model=EventOut)
+async def get_event(event_id: str, current_user: Any = Depends(get_current_user)) -> Any:
+    db = get_database()
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    # Check authorization
+    if str(event.get("user_id")) != str(current_user.get("_id")):
+        raise HTTPException(status_code=403, detail="Not authorized to access this event")
+        
+    event["id"] = str(event["_id"])
+    return event
 
 
 @router.post("/", response_model=EventOut)
@@ -83,6 +106,56 @@ async def upload_template(event_id: str, file: UploadFile = File(...), current_u
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Template uploaded successfully", "template_path": file_path}
+
+@router.post("/{event_id}/logo")
+async def upload_logo(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    file_path = os.path.join(UPLOAD_DIR, f"{event_id}_logo_{file.filename}")
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+
+    db = get_database()
+    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"logo_path": file_path}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Logo uploaded successfully", "logo_path": file_path}
+
+@router.post("/{event_id}/signature")
+async def upload_signature(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    file_path = os.path.join(UPLOAD_DIR, f"{event_id}_sig_{file.filename}")
+    with open(file_path, "wb") as f:
+        f.write(await file.read())
+
+    db = get_database()
+    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"signature_path": file_path}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Signature uploaded successfully", "signature_path": file_path}
+
+class EventAuthorityUpdate(BaseModel):
+    authority_name: str
+    authority_position: str
+
+@router.patch("/{event_id}/authority")
+async def update_authority(event_id: str, payload: EventAuthorityUpdate, current_user: Any = Depends(get_current_user)):
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    db = get_database()
+    result = await db.events.update_one(
+        {"_id": ObjectId(event_id)}, 
+        {"$set": {"authority_name": payload.authority_name, "authority_position": payload.authority_position}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Authority updated successfully"}
 
 
 @router.post("/{event_id}/participants")
@@ -131,6 +204,7 @@ async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequ
         date_text=payload.date_text.strip(),
         template_id=payload.template_id.strip(),
         role=payload.role.strip(),
+        email=payload.email.strip() if payload.email else "",
     )
     return {"message": "Certificate generated", **result}
 
@@ -141,23 +215,69 @@ async def generate_manual_bulk(event_id: str, payload: ManualBulkGenerateRequest
         raise HTTPException(status_code=400, detail="Invalid event ID")
 
     results = []
-    cleaned_names = [n.strip() for n in payload.participant_names if n.strip()]
-    if not cleaned_names:
-        raise HTTPException(status_code=400, detail="At least one participant name is required")
+    if not payload.participants:
+        raise HTTPException(status_code=400, detail="At least one participant entry is required")
 
-    for name in cleaned_names:
+    for p in payload.participants:
         generated = await generate_single_manual_certificate(
             event_id=event_id,
-            participant_name=name,
+            participant_name=p.name.strip(),
             event_name=payload.event_name.strip(),
             organization=payload.organization.strip(),
             date_text=payload.date_text.strip(),
             template_id=payload.template_id.strip(),
-            role=payload.role.strip(),
+            role=p.role.strip() if p.role else "",
+            email=p.email.strip() if p.email else "",
         )
         results.append(generated)
 
     return {"message": f"Generated {len(results)} certificates", "certificates": results}
+
+
+@router.post("/{event_id}/certificates/{cert_id}/send-email")
+async def send_manual_email(event_id: str, cert_id: str, current_user: Any = Depends(get_current_user)):
+    db = get_database()
+    cert = await db.certificates.find_one({"id": cert_id, "event_id": event_id})
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    
+    # Try to find user email in metadata or participants collection
+    meta = cert.get("metadata", {})
+    target_email = ""
+    
+    # Check if we have email in metadata or if we can find participant
+    participant = await db.participants.find_one({"certificate_id": cert_id})
+    if participant:
+        target_email = participant.get("email", "")
+    
+    # Check metadata if participant collection failed
+    if not target_email:
+        target_email = meta.get("email", "")
+    
+    if not target_email:
+         raise HTTPException(status_code=400, detail="No email address found for this certificate. Please ensure participant has an email.")
+
+    event_name = meta.get("event_name", "Event")
+    org = meta.get("organization", "Organization")
+    subject = f"Your Certificate for {event_name}"
+    body = f"Hello {cert['participant_name']},\n\nAttached is your certificate for {event_name}.\n\nBest regards,\n{org}"
+    
+    from app.services.email_service import send_certificate_email
+    from app.services.email_service import send_certificate_email
+    from app.core.config import settings
+    
+    if not settings.SMTP_HOST or not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+        raise HTTPException(
+            status_code=400, 
+            detail="SMTP is not configured. Please add SMTP_USER and SMTP_PASSWORD to your .env file."
+        )
+
+    success = await send_certificate_email(target_email, subject, body, cert["file_path"])
+    
+    if success:
+        return {"message": f"Email sent to {target_email}"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send email")
 
 
 @router.post("/{event_id}/generate")

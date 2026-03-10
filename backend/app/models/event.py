@@ -6,7 +6,12 @@ class EventBase(BaseModel):
     name: str = Field(..., min_length=2)
     description: Optional[str] = None
     date: datetime
+    organization: str = Field(default="Event Organizer", min_length=2)
     organization_id: Optional[str] = None # Or derived from user
+    logo_path: Optional[str] = None
+    signature_path: Optional[str] = None
+    authority_name: Optional[str] = None
+    authority_position: Optional[str] = None
 
 class EventCreate(EventBase):
     pass

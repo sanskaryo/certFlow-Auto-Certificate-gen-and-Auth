@@ -5,6 +5,7 @@ import EventDetail from './EventDetail';
 function EventList() {
     const [events, setEvents] = useState([]);
     const [name, setName] = useState('');
+    const [organizer, setOrganizer] = useState('');
     const [date, setDate] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -46,11 +47,12 @@ function EventList() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ name, date: new Date(date).toISOString() })
+                body: JSON.stringify({ name, organization: organizer, date: new Date(date).toISOString() })
             });
             if (response.ok) {
                 setSuccess('Event created successfully! 🎉');
                 setName('');
+                setOrganizer('');
                 setDate('');
                 fetchEvents();
                 setTimeout(() => setSuccess(''), 3000);
@@ -107,6 +109,18 @@ function EventList() {
                             disabled={isCreating}
                             className="w-full px-5 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 outline-none transition-all duration-200 placeholder-gray-400"
                             placeholder="e.g. Annual Tech Hackathon 2024"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2.5">Organizer Name</label>
+                        <input
+                            type="text"
+                            required
+                            value={organizer}
+                            onChange={e => setOrganizer(e.target.value)}
+                            disabled={isCreating}
+                            className="w-full px-5 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 outline-none transition-all duration-200 placeholder-gray-400"
+                            placeholder="e.g. Acme Corporation"
                         />
                     </div>
                     <div className="flex-1">

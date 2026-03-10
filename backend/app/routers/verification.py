@@ -72,4 +72,4 @@ async def preview_certificate_pdf(cert_id: str):
     file_path = cert.get("file_path")
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Certificate file not found")
-    return FileResponse(file_path, media_type="application/pdf", filename=f"{cert_id}.pdf")
+    return FileResponse(file_path, media_type="application/pdf", content_disposition_type="inline")

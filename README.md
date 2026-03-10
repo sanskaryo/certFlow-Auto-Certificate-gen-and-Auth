@@ -14,6 +14,7 @@ CertFlow is a full-stack certificate generation and verification platform with s
 - Public certificate verification via ID/QR
 - PDF certificate preview endpoint
 - Integrity checks using verification hash metadata
+- Email dispatch system for sending certificates directly to users
 
 ## Tech Stack
 
@@ -59,6 +60,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES=10080
 
 # IMPORTANT: must be publicly reachable when QR is scanned from another device
 FRONTEND_VERIFY_BASE_URL=http://localhost:5173/verify/
+
+# Optional Email Configuration for certificate dispatcher
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_app_password
+SMTP_FROM_EMAIL=your_email@gmail.com
 ```
 
 Run backend:
