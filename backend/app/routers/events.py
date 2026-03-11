@@ -113,7 +113,7 @@ async def upload_logo(event_id: str, file: UploadFile = File(...), current_user:
         raise HTTPException(status_code=400, detail="Invalid event ID")
     
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(UPLOAD_DIR, f"{event_id}_logo_{file.filename}")
+    file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_logo_{file.filename}"))
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
@@ -129,7 +129,7 @@ async def upload_signature(event_id: str, file: UploadFile = File(...), current_
         raise HTTPException(status_code=400, detail="Invalid event ID")
     
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(UPLOAD_DIR, f"{event_id}_sig_{file.filename}")
+    file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_sig_{file.filename}"))
     with open(file_path, "wb") as f:
         f.write(await file.read())
 

@@ -103,7 +103,47 @@ def _render_overlay_pdf(participant: dict, event: dict, cert_id: str, qr_path: s
     c.setFont("Helvetica", 14)
     c.drawString(width - 260, 50, f"Date: {event.get('date_text', datetime.utcnow().strftime('%Y-%m-%d'))}")
     c.drawString(50, 50, f"ID: {cert_id}")
-    c.drawImage(qr_path, 50, 70, width=1 * inch, height=1 * inch)
+    c.drawImage(qr_path, 50, 70, width=0.9 * inch, height=0.9 * inch)
+
+    # Optional Logo (centered top)
+    logo_path = event.get("logo_path")
+    if logo_path:
+        if not os.path.exists(logo_path): # Backup for relative paths
+            logo_path = os.path.abspath(os.path.join("uploads", os.path.basename(logo_path)))
+            
+    if logo_path and os.path.exists(logo_path):
+        try:
+            # Lowered logo to height - 100 for better margin
+            c.drawImage(logo_path, width/2 - 0.5*inch, height - 100, width=1*inch, height=1*inch, preserveAspectRatio=True)
+        except Exception:
+            pass
+
+    # Optional Signature & Authority (bottom right)
+    sig_path = event.get("signature_path")
+    if sig_path and not os.path.exists(sig_path):
+        sig_path = os.path.abspath(os.path.join("uploads", os.path.basename(sig_path)))
+        
+    auth_name = event.get("authority_name")
+    auth_pos = event.get("authority_position")
+
+    if (sig_path and os.path.exists(sig_path)) or auth_name or auth_pos:
+        sig_y = 100
+        sig_x = width - 200
+        if sig_path and os.path.exists(sig_path):
+            try:
+                c.drawImage(sig_path, sig_x, sig_y, width=1.5*inch, height=0.6*inch, preserveAspectRatio=True)
+                sig_y -= 15
+            except Exception:
+                pass
+        
+        c.setFont("Helvetica", 10)
+        if auth_name:
+            c.drawCentredString(sig_x + 0.75*inch, sig_y, auth_name)
+            sig_y -= 12
+        if auth_pos:
+            c.setFont("Helvetica", 8)
+            c.drawCentredString(sig_x + 0.75*inch, sig_y, auth_pos)
+
     c.save()
     return overlay_path
 
@@ -129,6 +169,10 @@ def _generate_standalone_pdf(
     template_id: str,
     qr_path: str,
     output_path: str,
+    logo_path: str = None,
+    signature_path: str = None,
+    authority_name: str = None,
+    authority_position: str = None,
 ):
     c = canvas.Canvas(output_path, pagesize=landscape(A4))
     width, height = landscape(A4)
@@ -236,6 +280,43 @@ def _generate_standalone_pdf(
         c.line(width - 220, 110, width - 80, 110)
         c.drawCentredString(width - 150, 95, "Authorized Signature")
 
+    # Optional Logo
+    if logo_path:
+        if not os.path.exists(logo_path):
+             logo_path = os.path.abspath(os.path.join("uploads", os.path.basename(logo_path)))
+
+    if logo_path and os.path.exists(logo_path):
+        try:
+            # Lowered logo to height - 100 for better margin
+            c.drawImage(logo_path, width/2 - 0.5*inch, height - 100, width=1*inch, height=1*inch, preserveAspectRatio=True)
+        except Exception:
+            pass
+
+    # Optional Signature & Authority
+    if (signature_path and os.path.exists(signature_path)) or authority_name or authority_position:
+        # Position at bottom right, above the date
+        sig_y = 100
+        sig_x = width - 200
+        
+        if signature_path:
+            if not os.path.exists(signature_path):
+                signature_path = os.path.abspath(os.path.join("uploads", os.path.basename(signature_path)))
+        
+        if signature_path and os.path.exists(signature_path):
+            try:
+                c.drawImage(signature_path, sig_x, sig_y, width=1.5*inch, height=0.6*inch, preserveAspectRatio=True)
+                sig_y -= 15
+            except Exception:
+                pass
+        
+        c.setFont(font_main, 10)
+        if authority_name:
+            c.drawCentredString(sig_x + 0.75*inch, sig_y, authority_name)
+            sig_y -= 12
+        if authority_position:
+            c.setFont(font_main, 8)
+            c.drawCentredString(sig_x + 0.75*inch, sig_y, authority_position)
+
     c.save()
 
 
@@ -285,8 +366,29 @@ async def generate_single_manual_certificate(
     output_filename = f"{participant_name.replace(' ', '_')}_{cert_id}.pdf"
     output_path = os.path.join(CERT_DIR, output_filename)
 
+    db = get_database()
+    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    logo_path = event.get("logo_path") if event else None
+    sig_path = event.get("signature_path") if event else None
+    auth_name = event.get("authority_name") if event else None
+    auth_pos = event.get("authority_position") if event else None
+
     try:
-        _generate_standalone_pdf(participant_name, event_name, organization, date_text, role, cert_id, template_id, qr_path, output_path)
+        _generate_standalone_pdf(
+            participant_name, 
+            event_name, 
+            organization, 
+            date_text, 
+            role, 
+            cert_id, 
+            template_id, 
+            qr_path, 
+            output_path,
+            logo_path=logo_path,
+            signature_path=sig_path,
+            authority_name=auth_name,
+            authority_position=auth_pos
+        )
         issued_at = datetime.utcnow()
         await _save_certificate_record(
             cert_id=cert_id,

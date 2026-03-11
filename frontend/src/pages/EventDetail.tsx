@@ -15,6 +15,9 @@ export default function EventDetail() {
   const [previewLink, setPreviewLink] = useState('');
   const [eventData, setEventData] = useState<any>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [sigFile, setSigFile] = useState<File | null>(null);
+  const [authority, setAuthority] = useState({ name: '', position: '' });
   const [manual, setManual] = useState({
     participant_name: '',
     event_name: '',
@@ -38,6 +41,7 @@ export default function EventDetail() {
         if (evtRes.ok) {
           const evtData = await evtRes.json();
           setEventData(evtData);
+          setAuthority({ name: evtData.authority_name || '', position: evtData.authority_position || '' });
           setManual(m => ({
             ...m,
             event_name: evtData.name,
@@ -155,6 +159,47 @@ export default function EventDetail() {
     }
   };
 
+  const handleUpdateBranding = async (type: 'logo' | 'sig' | 'auth') => {
+    setMsg('Updating branding...');
+    const formData = new FormData();
+    let endpoint = '';
+
+    if (type === 'logo' && logoFile) {
+      formData.append('file', logoFile);
+      endpoint = `${API}/events/${id}/logo`;
+    } else if (type === 'sig' && sigFile) {
+      formData.append('file', sigFile);
+      endpoint = `${API}/events/${id}/signature`;
+    } else if (type === 'auth') {
+      const res = await fetch(`${API}/events/${id}/authority`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ authority_name: authority.name, authority_position: authority.position }),
+      });
+      const data = await res.json();
+      setMsg(res.ok ? data.message : data.detail || 'Update failed');
+      return;
+    } else {
+      setMsg('Please select a file first');
+      return;
+    }
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      setMsg(res.ok ? data.message : data.detail || 'Upload failed');
+    } catch (e) {
+      setMsg('Error uploading file');
+    }
+  };
+
   const handleGenerateCsvBg = async () => {
     setMsg('Starting background generation...');
     try {
@@ -212,19 +257,54 @@ export default function EventDetail() {
         </button>
       </header>
 
-      <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold text-gray-800 mb-3">1. Select Template Name</h3>
-        <select
-          value={templateId}
-          onChange={(e) => setTemplateId(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-prime-500 outline-none bg-white text-gray-700 font-medium"
-        >
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+      <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">1. Select Template Name</h3>
+          <select
+            value={templateId}
+            onChange={(e) => setTemplateId(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-4 py-3 focus:ring-2 focus:ring-prime-500 outline-none bg-white text-gray-700 font-medium"
+          >
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">2. Branding (Logo & Sig)</h3>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files?.[0] || null)} className="text-xs flex-1" />
+              <button onClick={() => handleUpdateBranding('logo')} className="text-xs bg-gray-100 px-2 py-1 rounded">Upload Logo</button>
+            </div>
+            <div className="flex gap-2">
+              <input type="file" accept="image/*" onChange={e => setSigFile(e.target.files?.[0] || null)} className="text-xs flex-1" />
+              <button onClick={() => handleUpdateBranding('sig')} className="text-xs bg-gray-100 px-2 py-1 rounded">Upload Sig</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">3. Authority Details</h3>
+          <div className="space-y-2">
+            <input
+              placeholder="Authority Name"
+              className="w-full text-xs border p-2 rounded"
+              value={authority.name}
+              onChange={e => setAuthority({ ...authority, name: e.target.value })}
+            />
+            <input
+              placeholder="Position (e.g. Director)"
+              className="w-full text-xs border p-2 rounded"
+              value={authority.position}
+              onChange={e => setAuthority({ ...authority, position: e.target.value })}
+            />
+            <button onClick={() => handleUpdateBranding('auth')} className="w-full text-xs bg-prime-600 text-white p-1 rounded">Save Authority</button>
+          </div>
+        </div>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
