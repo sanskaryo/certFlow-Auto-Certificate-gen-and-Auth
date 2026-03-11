@@ -33,7 +33,7 @@ export default function EventDetail() {
       try {
         const res = await fetch(`${API}/events/templates`);
         const data = await res.json();
-        setTemplates(data.templates || []);
+        let fetchedTemplates = data.templates || [];
 
         const evtRes = await fetch(`${API}/events/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -48,7 +48,20 @@ export default function EventDetail() {
             organization: evtData.organization || 'Event Organizer',
             date_text: evtData.date_text || m.date_text
           }));
+          if (evtData.template_id === 'ai-generated' || evtData.template_path) {
+            const customId = evtData.template_id || 'ai-generated';
+            if (!fetchedTemplates.find((t: any) => t.id === customId)) {
+              fetchedTemplates = [{ id: customId, name: customId === 'ai-generated' ? 'AI Generated Template' : 'Uploaded Custom Template', bg: '', title: '' }, ...fetchedTemplates];
+            }
+            setTemplateId(customId);
+          } else if (evtData.template_id) {
+            setTemplateId(evtData.template_id);
+          }
         }
+        if (!fetchedTemplates.find((t: any) => t.id === 'ai-generated')) {
+          fetchedTemplates.push({ id: 'ai-generated', name: 'AI Generated Template', bg: '', title: '' });
+        }
+        setTemplates(fetchedTemplates);
       } catch (e) {
         console.error("Failed to fetch event data", e);
       }

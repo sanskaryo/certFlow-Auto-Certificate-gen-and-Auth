@@ -4,6 +4,9 @@ import os
 import uuid
 from datetime import datetime
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 import qrcode
 from bson import ObjectId
@@ -115,7 +118,9 @@ def _render_overlay_pdf(participant: dict, event: dict, cert_id: str, qr_path: s
         try:
             # Lowered logo to height - 100 for better margin
             c.drawImage(logo_path, width/2 - 0.5*inch, height - 100, width=1*inch, height=1*inch, preserveAspectRatio=True)
-        except Exception:
+            logger.info(f"Successfully drew overlay logo from {logo_path}")
+        except Exception as e:
+            logger.error(f"Failed to draw overlay logo from {logo_path}: {e}")
             pass
 
     # Optional Signature & Authority (bottom right)
@@ -133,7 +138,9 @@ def _render_overlay_pdf(participant: dict, event: dict, cert_id: str, qr_path: s
             try:
                 c.drawImage(sig_path, sig_x, sig_y, width=1.5*inch, height=0.6*inch, preserveAspectRatio=True)
                 sig_y -= 15
-            except Exception:
+                logger.info(f"Successfully drew overlay signature from {sig_path}")
+            except Exception as e:
+                logger.error(f"Failed to draw overlay signature from {sig_path}: {e}")
                 pass
         
         c.setFont("Helvetica", 10)
@@ -173,14 +180,18 @@ def _generate_standalone_pdf(
     signature_path: str = None,
     authority_name: str = None,
     authority_position: str = None,
+    template_path: str = None,
 ):
     c = canvas.Canvas(output_path, pagesize=landscape(A4))
     width, height = landscape(A4)
     style = TEMPLATE_PRESETS.get(template_id, TEMPLATE_PRESETS["classic-blue"])
     
     # Background
-    c.setFillColor(style["bg"])
-    c.rect(0, 0, width, height, fill=1, stroke=0)
+    if template_path and os.path.exists(template_path) and template_path.endswith('.png'):
+        c.drawImage(template_path, 0, 0, width=width, height=height)
+    else:
+        c.setFillColor(style["bg"])
+        c.rect(0, 0, width, height, fill=1, stroke=0)
     
     # Custom flourishes based on template type
     if template_id == "hackathon-neon":
@@ -289,7 +300,9 @@ def _generate_standalone_pdf(
         try:
             # Lowered logo to height - 100 for better margin
             c.drawImage(logo_path, width/2 - 0.5*inch, height - 100, width=1*inch, height=1*inch, preserveAspectRatio=True)
-        except Exception:
+            logger.info(f"Successfully drew logo from {logo_path}")
+        except Exception as e:
+            logger.error(f"Failed to draw logo from {logo_path}: {e}")
             pass
 
     # Optional Signature & Authority
@@ -306,7 +319,9 @@ def _generate_standalone_pdf(
             try:
                 c.drawImage(signature_path, sig_x, sig_y, width=1.5*inch, height=0.6*inch, preserveAspectRatio=True)
                 sig_y -= 15
-            except Exception:
+                logger.info(f"Successfully drew signature from {signature_path}")
+            except Exception as e:
+                logger.error(f"Failed to draw signature from {signature_path}: {e}")
                 pass
         
         c.setFont(font_main, 10)
@@ -372,6 +387,10 @@ async def generate_single_manual_certificate(
     sig_path = event.get("signature_path") if event else None
     auth_name = event.get("authority_name") if event else None
     auth_pos = event.get("authority_position") if event else None
+    template_path_db = event.get("template_path") if event else None
+    
+    # If using AI template, pass the DB template_path
+    pass_template_path = template_path_db if template_id == "ai-generated" else None
 
     try:
         _generate_standalone_pdf(
@@ -387,7 +406,8 @@ async def generate_single_manual_certificate(
             logo_path=logo_path,
             signature_path=sig_path,
             authority_name=auth_name,
-            authority_position=auth_pos
+            authority_position=auth_pos,
+            template_path=pass_template_path
         )
         issued_at = datetime.utcnow()
         await _save_certificate_record(

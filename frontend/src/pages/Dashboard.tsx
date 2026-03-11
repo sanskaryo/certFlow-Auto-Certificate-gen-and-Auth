@@ -6,7 +6,8 @@ function EventList() {
     const [events, setEvents] = useState([]);
     const [name, setName] = useState('');
     const [organizer, setOrganizer] = useState('');
-    const [date, setDate] = useState('');
+    const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(true);
@@ -18,6 +19,7 @@ function EventList() {
     }, [token]);
 
     const fetchEvents = async () => {
+        console.log('[Dashboard] Fetching events...');
         try {
             setLoading(true);
             const response = await fetch('http://localhost:8000/events/', {
@@ -36,6 +38,7 @@ function EventList() {
 
     const handleCreateEvent = async (e: React.FormEvent) => {
         e.preventDefault();
+        console.log(`[Dashboard] Creating new event: ${name}`);
         setError('');
         setSuccess('');
         setIsCreating(true);
@@ -47,22 +50,50 @@ function EventList() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ name, organization: organizer, date: new Date(date).toISOString() })
+                body: JSON.stringify({ name, organization: organizer, date: new Date(date).toISOString(), description })
             });
             if (response.ok) {
-                setSuccess('Event created successfully! 🎉');
+                setSuccess(description ? 'Event created & AI Template generated successfully! 🎉' : 'Event created successfully! 🎉');
                 setName('');
                 setOrganizer('');
-                setDate('');
+                setDate(new Date().toISOString().split('T')[0]);
+                setDescription('');
                 fetchEvents();
                 setTimeout(() => setSuccess(''), 3000);
             } else {
                 setError('Failed to create event');
             }
         } catch (err) {
+            console.error('[Dashboard] Error creating event:', err);
             setError('Error creating event');
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const handleDeleteEvent = async (eventId: string, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!window.confirm("Are you sure you want to delete this event? All associated certificates will also be deleted.")) return;
+
+        console.log(`[Dashboard] Attempting to delete event: ${eventId}`);
+        try {
+            const response = await fetch(`http://localhost:8000/events/${eventId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                console.log(`[Dashboard] Successfully deleted event: ${eventId}`);
+                setSuccess('Event deleted successfully! 🗑️');
+                fetchEvents();
+                setTimeout(() => setSuccess(''), 3000);
+            } else {
+                console.error(`[Dashboard] Failed to delete event: ${eventId}`);
+                setError('Failed to delete event');
+            }
+        } catch (err) {
+            console.error(`[Dashboard] Error deleting event: ${eventId}`, err);
+            setError('Error deleting event');
         }
     };
 
@@ -134,8 +165,22 @@ function EventList() {
                             className="w-full px-5 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 outline-none transition-all duration-200"
                         />
                     </div>
+                </form>
+                <div className="mt-4 flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 w-full">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2.5">Optional AI Template Description</label>
+                        <textarea
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            disabled={isCreating}
+                            className="w-full px-5 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 outline-none transition-all duration-200 placeholder-gray-400"
+                            placeholder="e.g. A futuristic neon cyber hackathon background"
+                            rows={2}
+                        />
+                    </div>
                     <button
-                        type="submit"
+                        type="button"
+                        onClick={handleCreateEvent}
                         disabled={isCreating}
                         className="bg-gradient-to-r from-prime-600 to-accent-600 hover:from-prime-700 hover:to-accent-700 disabled:from-gray-400 disabled:to-gray-400 text-white px-8 py-3 rounded-xl font-bold h-[50px] shadow-lg shadow-prime-500/20 transition-all duration-200 active:scale-95 disabled:shadow-none flex items-center justify-center gap-2 w-full md:w-auto"
                     >
@@ -144,7 +189,7 @@ function EventList() {
                                 <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 2v4m0 12v4M4.22 4.22l2.83 2.83m7.9 7.9l2.83 2.83M2 12h4m12 0h4m-17.78 7.78l2.83-2.83m7.9-7.9l2.83-2.83"></path>
                                 </svg>
-                                Creating...
+                                {description ? 'Generating AI Template...' : 'Creating...'}
                             </>
                         ) : (
                             <>
@@ -155,7 +200,7 @@ function EventList() {
                             </>
                         )}
                     </button>
-                </form>
+                </div>
             </div>
 
             {/* Events Grid */}
@@ -191,10 +236,21 @@ function EventList() {
                                         <h4 className="text-xl font-bold text-gray-900 group-hover:gradient-text transition-all duration-300">{evt.name || 'Untitled Event'}</h4>
                                         <p className="text-gray-500 text-sm mt-1">📅 {new Date(evt.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
                                     </div>
-                                    <div className="w-10 h-10 bg-gradient-to-br from-prime-500 to-accent-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                        </svg>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={(e) => handleDeleteEvent(evt.id, e)}
+                                            className="w-10 h-10 bg-red-50 hover:bg-red-100 text-red-500 rounded-full flex items-center justify-center transition-colors duration-300 z-10"
+                                            title="Delete Event"
+                                        >
+                                            <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path>
+                                            </svg>
+                                        </button>
+                                        <div className="w-10 h-10 bg-gradient-to-br from-prime-500 to-accent-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                                            </svg>
+                                        </div>
                                     </div>
                                 </div>
 

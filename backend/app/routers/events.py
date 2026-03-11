@@ -2,8 +2,10 @@ import io
 import os
 import zipfile
 from datetime import datetime
+import logging
 from typing import Any, List
 
+logger = logging.getLogger(__name__)
 import pandas as pd
 from bson import ObjectId
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
@@ -13,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.database import get_database
 from app.models.event import EventCreate, EventOut
 from app.routers.auth import get_current_user
+from app.services.ai_service import generate_certificate_background
 from app.services.certificate_service import (
     generate_single_manual_certificate,
     process_certificate_generation,
@@ -56,6 +59,7 @@ async def list_templates():
 
 @router.get("/", response_model=List[EventOut])
 async def list_events(current_user: Any = Depends(get_current_user)) -> Any:
+    logger.info(f"Fetching events for user {current_user.get('_id')}")
     user_id = str(current_user.get("_id"))
     db = get_database()
     cursor = db.events.find({"user_id": user_id})
@@ -84,14 +88,63 @@ async def get_event(event_id: str, current_user: Any = Depends(get_current_user)
 
 @router.post("/", response_model=EventOut)
 async def create_event(event_in: EventCreate, current_user: Any = Depends(get_current_user)) -> Any:
+    logger.info(f"Creating event '{event_in.name}' for user {current_user.get('_id')}")
     db = get_database()
     event_dict = event_in.model_dump()
     event_dict["user_id"] = str(current_user.get("_id"))
     event_dict["created_at"] = datetime.utcnow()
+    
+    # Generate AI background if description is provided
+    if event_dict.get("description"):
+        logger.info(f"Generating AI background for event based on description: {event_dict['description']}")
+        try:
+            # Event isn't in DB yet, but we can generate a temporary ID or use insert_one first
+            result = await db.events.insert_one(event_dict)
+            event_id = str(result.inserted_id)
+            event_dict["id"] = event_id
+            
+            # Generate the image
+            bg_path = generate_certificate_background(event_dict["description"], event_id)
+            
+            # Update the event with the template path
+            await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"template_path": bg_path, "template_id": "ai-generated"}})
+            event_dict["template_path"] = bg_path
+            event_dict["template_id"] = "ai-generated"
+            return event_dict
+        except Exception as e:
+            logger.error(f"Failed to generate AI background: {e}")
+            # If it fails, we still created the event, but we might want to return a warning
+            pass
+            return event_dict
+            
+    # Standard flow (no AI)
     result = await db.events.insert_one(event_dict)
     event_dict["id"] = str(result.inserted_id)
     return event_dict
 
+
+@router.delete("/{event_id}")
+async def delete_event(event_id: str, current_user: Any = Depends(get_current_user)):
+    db = get_database()
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    if str(event.get("user_id")) != str(current_user.get("_id")):
+        logger.warning(f"User {current_user.get('_id')} attempted to delete unauthorized event {event_id}")
+        raise HTTPException(status_code=403, detail="Not authorized to delete this event")
+        
+    result = await db.events.delete_one({"_id": ObjectId(event_id)})
+    if result.deleted_count == 1:
+        await db.participants.delete_many({"event_id": event_id})
+        await db.certificates.delete_many({"event_id": event_id})
+        logger.info(f"Event {event_id} deleted successfully by user {current_user.get('_id')}")
+        return {"message": "Event deleted successfully"}
+    
+    raise HTTPException(status_code=500, detail="Failed to delete event")
 
 @router.post("/{event_id}/template")
 async def upload_template(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):

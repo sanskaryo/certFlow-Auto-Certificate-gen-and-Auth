@@ -12,3 +12,4 @@ pydantic[email]==2.5.3
 pydantic-settings==2.1.0
 PyPDF2==3.0.1
 aiosmtplib==3.0.1
+google-genai==0.3.0
