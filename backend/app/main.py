@@ -20,9 +20,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(verification.router)
+
+# Mount uploads directory for previewing AI backgrounds
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 async def root():

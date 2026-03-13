@@ -284,6 +284,65 @@ export default function EventDetail() {
               </option>
             ))}
           </select>
+          {templateId === 'ai-generated' && (
+            <div className="mt-3 space-y-2 border-t pt-3">
+              {!eventData?.template_path ? (
+                <div className="text-xs text-orange-600 font-medium mb-1">
+                  No AI template exists for this event yet.
+                </div>
+              ) : (
+                <div className="text-right mb-2">
+                  <a
+                    href={`${API}/${eventData.template_path.replace(/\\/g, '/')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-prime-600 font-bold hover:underline"
+                  >
+                    Preview Current AI Template ↗
+                  </a>
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  placeholder="Describe your desired theme (e.g. Modern Tech, Elegant Gold)"
+                  className="w-full text-xs border border-gray-200 px-3 py-2 rounded focus:ring-prime-500 outline-none"
+                  id="ai-prompt-input"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const promptInput = document.getElementById('ai-prompt-input') as HTMLInputElement;
+                    const prompt = promptInput?.value || eventData?.description || 'Professional Certificate';
+                    setMsg('Generating AI Template... (this takes ~10-15s)');
+                    try {
+                      const res = await fetch(`${API}/events/${id}/ai-template`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ prompt })
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setMsg('AI Template Regenerated Successfully!');
+                        setEventData({ ...eventData, template_path: data.template_path, template_id: 'ai-generated' });
+                        if (promptInput) promptInput.value = '';
+                      } else {
+                        setMsg(`Error: ${data.detail || 'Generation failed'}`);
+                      }
+                    } catch (err) {
+                      setMsg(`Error generating template`);
+                    }
+                  }}
+                  className="w-full bg-indigo-600 text-white text-xs py-2 rounded font-semibold hover:bg-indigo-700 transition shadow-sm"
+                >
+                  {eventData?.template_path ? 'Regenerate AI Template' : 'Generate AI Template'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>

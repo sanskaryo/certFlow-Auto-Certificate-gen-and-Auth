@@ -29,6 +29,9 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
+class AITemplateRequest(BaseModel):
+    prompt: str
+
 class ManualGenerateRequest(BaseModel):
     participant_name: str = Field(..., min_length=2)
     event_name: str = Field(..., min_length=2)
@@ -159,6 +162,24 @@ async def upload_template(event_id: str, file: UploadFile = File(...), current_u
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Template uploaded successfully", "template_path": file_path}
+
+@router.post("/{event_id}/ai-template")
+async def generate_ai_template_endpoint(event_id: str, payload: AITemplateRequest, current_user: Any = Depends(get_current_user)):
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    
+    db = get_database()
+    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    if not event:
+         raise HTTPException(status_code=404, detail="Event not found")
+         
+    try:
+        bg_path = generate_certificate_background(payload.prompt, event_id)
+        await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"template_path": bg_path, "template_id": "ai-generated"}})
+        return {"message": "AI Template generated successfully", "template_path": bg_path}
+    except Exception as e:
+        logger.error(f"Failed to generate AI background: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate AI template: {str(e)}")
 
 @router.post("/{event_id}/logo")
 async def upload_logo(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):

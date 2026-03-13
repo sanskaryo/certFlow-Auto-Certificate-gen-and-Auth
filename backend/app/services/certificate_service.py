@@ -116,8 +116,8 @@ def _render_overlay_pdf(participant: dict, event: dict, cert_id: str, qr_path: s
             
     if logo_path and os.path.exists(logo_path):
         try:
-            # Lowered logo to height - 100 for better margin
-            c.drawImage(logo_path, width/2 - 0.5*inch, height - 100, width=1*inch, height=1*inch, preserveAspectRatio=True)
+            # Top-left corner, inside border
+            c.drawImage(logo_path, 30, height - 90, width=1.5*inch, height=1.5*inch, preserveAspectRatio=True)
             logger.info(f"Successfully drew overlay logo from {logo_path}")
         except Exception as e:
             logger.error(f"Failed to draw overlay logo from {logo_path}: {e}")
@@ -186,10 +186,27 @@ def _generate_standalone_pdf(
     width, height = landscape(A4)
     style = TEMPLATE_PRESETS.get(template_id, TEMPLATE_PRESETS["classic-blue"])
     
+    logger.info(f"Initializing PDF generation. template_id={template_id}, template_path={template_path}")
+
     # Background
-    if template_path and os.path.exists(template_path) and template_path.endswith('.png'):
-        c.drawImage(template_path, 0, 0, width=width, height=height)
-    else:
+    if template_path:
+        if not os.path.exists(template_path):
+            resolved_path = os.path.abspath(os.path.join("uploads", os.path.basename(template_path)))
+            logger.info(f"Template path {template_path} not found. Resolved to {resolved_path}")
+            template_path = resolved_path
+
+    drawn_bg = False
+    if template_path and os.path.exists(template_path):
+        try:
+            logger.info(f"Drawing template background from {template_path}")
+            c.drawImage(template_path, 0, 0, width=width, height=height, preserveAspectRatio=False)
+            drawn_bg = True
+            logger.info("Successfully drew template background")
+        except Exception as e:
+            logger.error(f"Failed to draw template background from {template_path}: {e}")
+            
+    if not drawn_bg:
+        logger.info(f"Falling back to standard template {template_id} since drawn_bg is False")
         c.setFillColor(style["bg"])
         c.rect(0, 0, width, height, fill=1, stroke=0)
     
@@ -298,8 +315,8 @@ def _generate_standalone_pdf(
 
     if logo_path and os.path.exists(logo_path):
         try:
-            # Lowered logo to height - 100 for better margin
-            c.drawImage(logo_path, width/2 - 0.5*inch, height - 100, width=1*inch, height=1*inch, preserveAspectRatio=True)
+            # Top-left corner, inside border
+            c.drawImage(logo_path, 30, height - 90, width=1.5*inch, height=1.5*inch, preserveAspectRatio=True)
             logger.info(f"Successfully drew logo from {logo_path}")
         except Exception as e:
             logger.error(f"Failed to draw logo from {logo_path}: {e}")
