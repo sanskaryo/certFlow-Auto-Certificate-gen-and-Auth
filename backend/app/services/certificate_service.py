@@ -18,6 +18,7 @@ from reportlab.pdfgen import canvas
 from app.core.config import settings
 from app.database import get_database
 from app.services.email_service import send_certificate_email
+from app.routers.profiles import ensure_profile_for_recipient
 
 CERT_DIR = "generated_certs"
 os.makedirs(CERT_DIR, exist_ok=True)
@@ -360,6 +361,7 @@ async def _save_certificate_record(
     verification_hash: str,
     issued_at: datetime,
     metadata: dict[str, Any],
+    recipient_email: str = "",
 ):
     db = get_database()
     cert_record = {
@@ -370,6 +372,7 @@ async def _save_certificate_record(
         "verification_hash": verification_hash,
         "issued_at": issued_at,
         "metadata": metadata,
+        "recipient_email": recipient_email,
     }
     await db.certificates.insert_one(cert_record)
 
@@ -427,6 +430,8 @@ async def generate_single_manual_certificate(
             template_path=pass_template_path
         )
         issued_at = datetime.utcnow()
+        if email:
+            await ensure_profile_for_recipient(email, participant_name)
         await _save_certificate_record(
             cert_id=cert_id,
             event_id=event_id,
@@ -442,6 +447,7 @@ async def generate_single_manual_certificate(
                 "role": role,
                 "email": email,
             },
+            recipient_email=email,
         )
         if email:
             subject = f"Your Certificate for {event_name}"
@@ -483,6 +489,9 @@ async def process_certificate_generation(event_id: str):
             output_filename = f"{participant['name'].replace(' ', '_')}_{cert_id}.pdf"
             output_path = os.path.join(CERT_DIR, output_filename)
             _merge_with_template(event["template_path"], overlay_path, output_path)
+            part_email = participant.get("email", "").strip()
+            if part_email:
+                await ensure_profile_for_recipient(part_email, participant["name"])
 
             await _save_certificate_record(
                 cert_id=cert_id,
@@ -498,13 +507,13 @@ async def process_certificate_generation(event_id: str):
                     "date_text": event_date_text,
                     "role": role,
                 },
+                recipient_email=part_email,
             )
             await db.participants.update_one(
                 {"_id": participant["_id"]},
                 {"$set": {"status": "generated", "certificate_id": cert_id}},
             )
             
-            part_email = participant.get("email", "").strip()
             if part_email:
                 subject = f"Your Certificate for {event['name']}"
                 org = str(event.get("organization_id", ""))

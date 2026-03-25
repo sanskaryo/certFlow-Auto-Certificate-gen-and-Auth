@@ -1,23 +1,115 @@
+import hashlib
+import os
+from datetime import datetime
+
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from datetime import datetime
-from app.database import get_database
+
 from app.core.config import settings
-import hashlib
-import os
-from bson import ObjectId
+from app.database import get_database
 
 router = APIRouter(prefix="/verify", tags=["verification"])
+
 
 class CertificateResponse(BaseModel):
     id: str
     participant_name: str
     event_name: str
+    organization: str | None = None
     role: str | None = None
+    date_text: str | None = None
     issued_at: datetime
     verification_hash: str
+    issuer_name: str | None = None
+    issuer_position: str | None = None
+    has_signature: bool = False
     is_valid: bool
+
+
+async def _track(cert_id: str, event_type: str, source: str = "verify"):
+    db = get_database()
+    await db.certificate_events.insert_one(
+        {
+            "cert_id": cert_id,
+            "event_type": event_type,
+            "source": source,
+            "created_at": datetime.utcnow(),
+        }
+    )
+
+
+def _validate_hash(cert: dict, cert_id: str, event_name: str) -> bool:
+    metadata = cert.get("metadata", {})
+    organization = metadata.get("organization", "")
+    date_text = metadata.get("date_text", "")
+    role = metadata.get("role", "")
+
+    expected_hash_v2 = hashlib.sha256(
+        f"{cert.get('participant_name', '')}|{event_name}|{organization}|{date_text}|{role}|{cert_id}|{settings.SECRET_KEY}".encode()
+    ).hexdigest()
+    expected_hash_v1 = hashlib.sha256(
+        f"{cert.get('participant_name', '')}|{event_name}|{cert_id}|{settings.SECRET_KEY}".encode()
+    ).hexdigest()
+    return cert.get("verification_hash") in {expected_hash_v2, expected_hash_v1}
+
+
+async def _build_response(cert: dict) -> CertificateResponse:
+    db = get_database()
+    cert_id = cert["id"]
+
+    event_name = cert.get("metadata", {}).get("event_name")
+    event = None
+    event_id = cert.get("event_id")
+    if event_id and ObjectId.is_valid(event_id):
+        event = await db.events.find_one({"_id": ObjectId(event_id)})
+    if not event_name and event:
+        event_name = event.get("name")
+    event_name = event_name or "Unknown Event"
+
+    if not _validate_hash(cert, cert_id, event_name):
+        raise HTTPException(status_code=400, detail="Certificate integrity check failed")
+
+    metadata = cert.get("metadata", {})
+    organization = metadata.get("organization") or (event.get("organization") if event else None)
+    issuer_name = event.get("authority_name") if event else None
+    issuer_position = event.get("authority_position") if event else None
+    has_signature = bool(event and event.get("signature_path"))
+
+    return CertificateResponse(
+        id=cert["id"],
+        participant_name=cert["participant_name"],
+        event_name=event_name,
+        organization=organization,
+        role=metadata.get("role") or None,
+        date_text=metadata.get("date_text") or None,
+        issued_at=cert["issued_at"],
+        verification_hash=cert["verification_hash"],
+        issuer_name=issuer_name,
+        issuer_position=issuer_position,
+        has_signature=has_signature,
+        is_valid=True,
+    )
+
+
+@router.get("/public-stats")
+async def public_stats():
+    db = get_database()
+    orgs_using = await db.users.count_documents({})
+    certs_issued = await db.certificates.count_documents({})
+    return {"orgs_using": orgs_using, "certs_issued": certs_issued}
+
+
+@router.get("/hash/{verification_hash}", response_model=CertificateResponse)
+async def verify_by_hash(verification_hash: str):
+    db = get_database()
+    cert = await db.certificates.find_one({"verification_hash": verification_hash})
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found or invalid")
+    await _track(cert["id"], "verified", "hash_lookup")
+    return await _build_response(cert)
+
 
 @router.get("/{cert_id}", response_model=CertificateResponse)
 async def verify_certificate(cert_id: str):
@@ -25,42 +117,28 @@ async def verify_certificate(cert_id: str):
     cert = await db.certificates.find_one({"id": cert_id})
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found or invalid")
+    await _track(cert_id, "verified", "id_lookup")
+    return await _build_response(cert)
 
-    event_name = cert.get("metadata", {}).get("event_name")
-    if not event_name:
-        event_id = cert.get("event_id")
-        if event_id and ObjectId.is_valid(event_id):
-            event = await db.events.find_one({"_id": ObjectId(event_id)})
-            if event:
-                event_name = event.get("name")
-    event_name = event_name or "Unknown Event"
 
-    metadata = cert.get("metadata", {})
-    organization = metadata.get("organization", "")
-    date_text = metadata.get("date_text", "")
-    role = metadata.get("role", "")
+@router.post("/{cert_id}/track/open")
+async def track_open(cert_id: str):
+    db = get_database()
+    cert = await db.certificates.find_one({"id": cert_id})
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    await _track(cert_id, "opened", "recipient")
+    return {"message": "Open tracked"}
 
-    # New hash format (v2): includes key metadata to strengthen tamper resistance.
-    expected_hash_v2 = hashlib.sha256(
-        f"{cert.get('participant_name', '')}|{event_name}|{organization}|{date_text}|{role}|{cert_id}|{settings.SECRET_KEY}".encode()
-    ).hexdigest()
-    # Legacy hash format (v1): backward compatibility for already-issued certs.
-    expected_hash_v1 = hashlib.sha256(
-        f"{cert.get('participant_name', '')}|{event_name}|{cert_id}|{settings.SECRET_KEY}".encode()
-    ).hexdigest()
 
-    if cert.get("verification_hash") not in {expected_hash_v2, expected_hash_v1}:
-        raise HTTPException(status_code=400, detail="Certificate integrity check failed")
-    
-    return CertificateResponse(
-        id=cert["id"],
-        participant_name=cert["participant_name"],
-        event_name=event_name,
-        role=role or None,
-        issued_at=cert["issued_at"],
-        verification_hash=cert["verification_hash"],
-        is_valid=True
-    )
+@router.post("/{cert_id}/track/share")
+async def track_share(cert_id: str):
+    db = get_database()
+    cert = await db.certificates.find_one({"id": cert_id})
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    await _track(cert_id, "shared", "recipient")
+    return {"message": "Share tracked"}
 
 
 @router.get("/{cert_id}/preview")

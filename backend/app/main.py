@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import connect_to_mongo, close_mongo_connection
-from app.routers import auth, events, verification
+from app.routers import auth, events, profiles, verification
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +25,7 @@ import os
 
 app.include_router(auth.router)
 app.include_router(events.router)
+app.include_router(profiles.router)
 app.include_router(verification.router)
 
 # Mount uploads directory for previewing AI backgrounds

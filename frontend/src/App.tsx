@@ -4,6 +4,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Verify from './pages/Verify';
 import Landing from './pages/Landing';
+import RecipientProfile from './pages/RecipientProfile';
 
 function App() {
     return (
@@ -15,6 +16,8 @@ function App() {
                     <Route path="/register" element={<Register />} />
                     <Route path="/dashboard/*" element={<Dashboard />} />
                     <Route path="/verify/:id" element={<Verify />} />
+                    <Route path="/verify" element={<Verify />} />
+                    <Route path="/@:username" element={<RecipientProfile />} />
                 </Routes>
             </div>
         </Router>

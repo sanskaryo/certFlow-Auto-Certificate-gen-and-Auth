@@ -6,9 +6,25 @@ from app.core.config import settings
 from app.database import get_database
 import jwt
 from typing import Any
+import re
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+
+def _slugify_username(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_]", "", value.lower().replace(" ", "_"))
+    return cleaned[:24] or "user"
+
+
+async def _unique_username(db, base: str) -> str:
+    candidate = _slugify_username(base)
+    i = 0
+    while await db.users.find_one({"username": candidate}):
+        i += 1
+        candidate = f"{_slugify_username(base)}{i}"
+    return candidate
+
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
@@ -33,27 +49,38 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     user["id"] = str(user["_id"])
     return user
 
+
+@router.get("/me", response_model=UserOut)
+async def get_me(current_user: Any = Depends(get_current_user)) -> Any:
+    return current_user
+
+
 @router.post("/register", response_model=UserOut)
 async def register(user_in: UserCreate) -> Any:
     db = get_database()
     if db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    
+
     existing_user = await db.users.find_one({"email": user_in.email})
     if existing_user:
         raise HTTPException(
             status_code=400,
             detail="The user with this email already exists in the system.",
         )
-    
+
     hashed_password = get_password_hash(user_in.password)
     user_dict = user_in.model_dump()
     user_dict["hashed_password"] = hashed_password
     del user_dict["password"]
-    
+
+    if not user_dict.get("username"):
+        local = str(user_dict["email"]).split("@")[0]
+        user_dict["username"] = await _unique_username(db, local)
+
     result = await db.users.insert_one(user_dict)
     user_dict["id"] = str(result.inserted_id)
     return user_dict
+
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
@@ -61,9 +88,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
     user_dict = await db.users.find_one({"email": form_data.username})
     if not user_dict:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    
+
     if not verify_password(form_data.password, user_dict["hashed_password"]):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    
+
     access_token = create_access_token(data={"sub": user_dict["email"]})
     return {"access_token": access_token, "token_type": "bearer"}

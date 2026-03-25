@@ -308,6 +308,7 @@ export default function EventDetail() {
                   placeholder="Describe your desired theme (e.g. Modern Tech, Elegant Gold)"
                   className="w-full text-xs border border-gray-200 px-3 py-2 rounded focus:ring-prime-500 outline-none"
                   id="ai-prompt-input"
+                  defaultValue={eventData?.description || ''}
                 />
                 <button
                   type="button"
@@ -346,35 +347,104 @@ export default function EventDetail() {
         </div>
 
         <div>
-          <h3 className="text-lg font-bold text-gray-800 mb-2">2. Branding (Logo & Sig)</h3>
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files?.[0] || null)} className="text-xs flex-1" />
-              <button onClick={() => handleUpdateBranding('logo')} className="text-xs bg-gray-100 px-2 py-1 rounded">Upload Logo</button>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">2. Branding (Logo &amp; Signature)</h3>
+          <div className="space-y-4">
+            {/* Logo Upload */}
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+              <label className="font-semibold text-sm text-gray-700 md:w-32">Logo</label>
+              <input
+                id="logo-upload"
+                type="file"
+                accept="image/*"
+                onChange={e => setLogoFile(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+              <div className="flex-1 flex items-center gap-2">
+                <label htmlFor="logo-upload" className="flex-1 cursor-pointer px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">
+                  {logoFile ? logoFile.name : 'No file chosen'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateBranding('logo')}
+                  className="bg-prime-600 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow hover:bg-prime-700 transition"
+                  disabled={!logoFile}
+                >
+                  Upload Logo
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <input type="file" accept="image/*" onChange={e => setSigFile(e.target.files?.[0] || null)} className="text-xs flex-1" />
-              <button onClick={() => handleUpdateBranding('sig')} className="text-xs bg-gray-100 px-2 py-1 rounded">Upload Sig</button>
+            {/* Signature Upload */}
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+              <label className="font-semibold text-sm text-gray-700 md:w-32">Signature</label>
+              <input
+                id="sig-upload"
+                type="file"
+                accept="image/*"
+                onChange={e => setSigFile(e.target.files?.[0] || null)}
+                className="hidden"
+              />
+              <div className="flex-1 flex items-center gap-2">
+                <label htmlFor="sig-upload" className="flex-1 cursor-pointer px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition">
+                  {sigFile ? sigFile.name : 'No file chosen'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateBranding('sig')}
+                  className="bg-prime-600 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow hover:bg-prime-700 transition"
+                  disabled={!sigFile}
+                >
+                  Upload Signature
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         <div>
           <h3 className="text-lg font-bold text-gray-800 mb-2">3. Authority Details</h3>
-          <div className="space-y-2">
-            <input
-              placeholder="Authority Name"
-              className="w-full text-xs border p-2 rounded"
-              value={authority.name}
-              onChange={e => setAuthority({ ...authority, name: e.target.value })}
-            />
-            <input
-              placeholder="Position (e.g. Director)"
-              className="w-full text-xs border p-2 rounded"
-              value={authority.position}
-              onChange={e => setAuthority({ ...authority, position: e.target.value })}
-            />
-            <button onClick={() => handleUpdateBranding('auth')} className="w-full text-xs bg-prime-600 text-white p-1 rounded">Save Authority</button>
+          <div className="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="flex-1 flex flex-col gap-2">
+              <label className="font-semibold text-sm text-gray-700">Authority Name</label>
+              <input
+                placeholder="e.g. Dr. Priya Sharma"
+                className="w-full text-base border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-prime-500 outline-none shadow-sm"
+                value={authority.name}
+                onChange={async e => {
+                  const newVal = e.target.value;
+                  setAuthority(a => ({ ...a, name: newVal }));
+                  // Auto-save on change
+                  await fetch(`${API}/events/${id}/authority`, {
+                    method: 'PATCH',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ authority_name: newVal, authority_position: authority.position }),
+                  });
+                }}
+              />
+            </div>
+            <div className="flex-1 flex flex-col gap-2">
+              <label className="font-semibold text-sm text-gray-700">Authority Position</label>
+              <input
+                placeholder="e.g. Director, IIT Bombay"
+                className="w-full text-base border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-prime-500 outline-none shadow-sm"
+                value={authority.position}
+                onChange={async e => {
+                  const newVal = e.target.value;
+                  setAuthority(a => ({ ...a, position: newVal }));
+                  // Auto-save on change
+                  await fetch(`${API}/events/${id}/authority`, {
+                    method: 'PATCH',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ authority_name: authority.name, authority_position: newVal }),
+                  });
+                }}
+              />
+            </div>
           </div>
         </div>
       </section>

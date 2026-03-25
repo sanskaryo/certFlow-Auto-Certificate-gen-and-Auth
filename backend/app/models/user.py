@@ -4,7 +4,8 @@ from typing import Optional
 class UserBase(BaseModel):
     name: str = Field(..., min_length=2)
     email: EmailStr
-    role: str = Field(default="admin") # "admin" or "staff"
+    role: str = Field(default="admin")
+    username: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6)

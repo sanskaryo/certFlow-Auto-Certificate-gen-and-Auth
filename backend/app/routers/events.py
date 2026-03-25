@@ -4,11 +4,13 @@ import zipfile
 from datetime import datetime
 import logging
 from typing import Any, List
+import hashlib
+import secrets
 
 logger = logging.getLogger(__name__)
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -32,6 +34,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 class AITemplateRequest(BaseModel):
     prompt: str
 
+
 class ManualGenerateRequest(BaseModel):
     participant_name: str = Field(..., min_length=2)
     event_name: str = Field(..., min_length=2)
@@ -47,12 +50,85 @@ class ParticipantEntry(BaseModel):
     email: str = ""
     role: str = ""
 
+
 class ManualBulkGenerateRequest(BaseModel):
     participants: List[ParticipantEntry]
     event_name: str = Field(..., min_length=2)
     organization: str = Field(..., min_length=2)
     date_text: str = Field(..., min_length=4)
     template_id: str = Field(default="classic-blue")
+
+
+class TeamMemberCreate(BaseModel):
+    email: str
+    role: str = Field(default="viewer")
+
+
+class TeamMemberUpdate(BaseModel):
+    role: str
+
+
+class APIIssueRequest(BaseModel):
+    participant_name: str
+    event_name: str
+    organization: str
+    date_text: str
+    role: str = ""
+    email: str = ""
+    template_id: str = "classic-blue"
+
+
+def _hash_api_key(raw_key: str) -> str:
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+async def _get_event_or_404(event_id: str):
+    if not ObjectId.is_valid(event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID")
+    db = get_database()
+    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
+async def _get_event_role(db, event_id: str, current_user: Any) -> str | None:
+    if str(current_user.get("_id")) == str((await db.events.find_one({"_id": ObjectId(event_id)})).get("user_id")):
+        return "admin"
+    team = await db.team_members.find_one({"event_id": event_id, "member_user_id": str(current_user.get("_id"))})
+    return team.get("role") if team else None
+
+
+def _role_allows(role: str | None, allowed: set[str]) -> bool:
+    if role == "admin":
+        return True
+    return role in allowed
+
+
+async def _require_event_access(event_id: str, current_user: Any, allowed: set[str]) -> tuple[dict, str]:
+    db = get_database()
+    event = await _get_event_or_404(event_id)
+
+    if str(event.get("user_id")) == str(current_user.get("_id")):
+        return event, "admin"
+
+    team = await db.team_members.find_one({"event_id": event_id, "member_user_id": str(current_user.get("_id"))})
+    team_role = team.get("role") if team else None
+    if not _role_allows(team_role, allowed):
+        raise HTTPException(status_code=403, detail="Not authorized for this event")
+    return event, team_role
+
+
+async def _track_cert_event(cert_id: str, event_type: str, source: str = "app"):
+    db = get_database()
+    await db.certificate_events.insert_one(
+        {
+            "cert_id": cert_id,
+            "event_type": event_type,
+            "source": source,
+            "created_at": datetime.utcnow(),
+        }
+    )
 
 
 @router.get("/templates")
@@ -65,8 +141,16 @@ async def list_events(current_user: Any = Depends(get_current_user)) -> Any:
     logger.info(f"Fetching events for user {current_user.get('_id')}")
     user_id = str(current_user.get("_id"))
     db = get_database()
-    cursor = db.events.find({"user_id": user_id})
-    events = await cursor.to_list(length=100)
+
+    own_events = await db.events.find({"user_id": user_id}).to_list(length=100)
+    team_memberships = await db.team_members.find({"member_user_id": user_id}).to_list(length=200)
+    team_event_ids = [m["event_id"] for m in team_memberships]
+    team_events = []
+    if team_event_ids:
+        team_events = await db.events.find({"_id": {"$in": [ObjectId(eid) for eid in team_event_ids if ObjectId.is_valid(eid)]}}).to_list(length=200)
+
+    merged = {str(evt["_id"]): evt for evt in own_events + team_events}
+    events = list(merged.values())
     for evt in events:
         evt["id"] = str(evt["_id"])
     return events
@@ -74,17 +158,7 @@ async def list_events(current_user: Any = Depends(get_current_user)) -> Any:
 
 @router.get("/{event_id}", response_model=EventOut)
 async def get_event(event_id: str, current_user: Any = Depends(get_current_user)) -> Any:
-    db = get_database()
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    event = await db.events.find_one({"_id": ObjectId(event_id)})
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    
-    # Check authorization
-    if str(event.get("user_id")) != str(current_user.get("_id")):
-        raise HTTPException(status_code=403, detail="Not authorized to access this event")
-        
+    event, _ = await _require_event_access(event_id, current_user, {"issuer", "viewer"})
     event["id"] = str(event["_id"])
     return event
 
@@ -96,31 +170,22 @@ async def create_event(event_in: EventCreate, current_user: Any = Depends(get_cu
     event_dict = event_in.model_dump()
     event_dict["user_id"] = str(current_user.get("_id"))
     event_dict["created_at"] = datetime.utcnow()
-    
-    # Generate AI background if description is provided
+
     if event_dict.get("description"):
         logger.info(f"Generating AI background for event based on description: {event_dict['description']}")
         try:
-            # Event isn't in DB yet, but we can generate a temporary ID or use insert_one first
             result = await db.events.insert_one(event_dict)
             event_id = str(result.inserted_id)
             event_dict["id"] = event_id
-            
-            # Generate the image
             bg_path = generate_certificate_background(event_dict["description"], event_id)
-            
-            # Update the event with the template path
             await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"template_path": bg_path, "template_id": "ai-generated"}})
             event_dict["template_path"] = bg_path
             event_dict["template_id"] = "ai-generated"
             return event_dict
         except Exception as e:
             logger.error(f"Failed to generate AI background: {e}")
-            # If it fails, we still created the event, but we might want to return a warning
-            pass
             return event_dict
-            
-    # Standard flow (no AI)
+
     result = await db.events.insert_one(event_dict)
     event_dict["id"] = str(result.inserted_id)
     return event_dict
@@ -128,31 +193,26 @@ async def create_event(event_in: EventCreate, current_user: Any = Depends(get_cu
 
 @router.delete("/{event_id}")
 async def delete_event(event_id: str, current_user: Any = Depends(get_current_user)):
+    event, role = await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete events")
+
     db = get_database()
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    
-    event = await db.events.find_one({"_id": ObjectId(event_id)})
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-        
-    if str(event.get("user_id")) != str(current_user.get("_id")):
-        logger.warning(f"User {current_user.get('_id')} attempted to delete unauthorized event {event_id}")
-        raise HTTPException(status_code=403, detail="Not authorized to delete this event")
-        
     result = await db.events.delete_one({"_id": ObjectId(event_id)})
     if result.deleted_count == 1:
         await db.participants.delete_many({"event_id": event_id})
         await db.certificates.delete_many({"event_id": event_id})
+        await db.team_members.delete_many({"event_id": event_id})
+        await db.api_keys.delete_many({"event_id": event_id})
         logger.info(f"Event {event_id} deleted successfully by user {current_user.get('_id')}")
         return {"message": "Event deleted successfully"}
-    
+
     raise HTTPException(status_code=500, detail="Failed to delete event")
+
 
 @router.post("/{event_id}/template")
 async def upload_template(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
+    await _require_event_access(event_id, current_user, {"issuer"})
     file_path = os.path.join(UPLOAD_DIR, f"{event_id}_template_{file.filename}")
     with open(file_path, "wb") as f:
         f.write(await file.read())
@@ -163,16 +223,12 @@ async def upload_template(event_id: str, file: UploadFile = File(...), current_u
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Template uploaded successfully", "template_path": file_path}
 
+
 @router.post("/{event_id}/ai-template")
 async def generate_ai_template_endpoint(event_id: str, payload: AITemplateRequest, current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    
+    await _require_event_access(event_id, current_user, {"issuer"})
     db = get_database()
-    event = await db.events.find_one({"_id": ObjectId(event_id)})
-    if not event:
-         raise HTTPException(status_code=404, detail="Event not found")
-         
+
     try:
         bg_path = generate_certificate_background(payload.prompt, event_id)
         await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"template_path": bg_path, "template_id": "ai-generated"}})
@@ -181,11 +237,11 @@ async def generate_ai_template_endpoint(event_id: str, payload: AITemplateReques
         logger.error(f"Failed to generate AI background: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate AI template: {str(e)}")
 
+
 @router.post("/{event_id}/logo")
 async def upload_logo(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    
+    await _require_event_access(event_id, current_user, {"issuer"})
+
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_logo_{file.filename}"))
     with open(file_path, "wb") as f:
@@ -197,11 +253,11 @@ async def upload_logo(event_id: str, file: UploadFile = File(...), current_user:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Logo uploaded successfully", "logo_path": file_path}
 
+
 @router.post("/{event_id}/signature")
 async def upload_signature(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    
+    await _require_event_access(event_id, current_user, {"issuer"})
+
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_sig_{file.filename}"))
     with open(file_path, "wb") as f:
@@ -213,19 +269,20 @@ async def upload_signature(event_id: str, file: UploadFile = File(...), current_
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Signature uploaded successfully", "signature_path": file_path}
 
+
 class EventAuthorityUpdate(BaseModel):
     authority_name: str
     authority_position: str
 
+
 @router.patch("/{event_id}/authority")
 async def update_authority(event_id: str, payload: EventAuthorityUpdate, current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    
+    await _require_event_access(event_id, current_user, {"issuer"})
+
     db = get_database()
     result = await db.events.update_one(
-        {"_id": ObjectId(event_id)}, 
-        {"$set": {"authority_name": payload.authority_name, "authority_position": payload.authority_position}}
+        {"_id": ObjectId(event_id)},
+        {"$set": {"authority_name": payload.authority_name, "authority_position": payload.authority_position}},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -234,9 +291,8 @@ async def update_authority(event_id: str, payload: EventAuthorityUpdate, current
 
 @router.post("/{event_id}/participants")
 async def upload_participants(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer"})
     db = get_database()
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
 
     contents = await file.read()
     try:
@@ -268,8 +324,7 @@ async def upload_participants(event_id: str, file: UploadFile = File(...), curre
 
 @router.post("/{event_id}/generate/manual")
 async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequest, current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
+    await _require_event_access(event_id, current_user, {"issuer"})
     result = await generate_single_manual_certificate(
         event_id=event_id,
         participant_name=payload.participant_name.strip(),
@@ -280,13 +335,13 @@ async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequ
         role=payload.role.strip(),
         email=payload.email.strip() if payload.email else "",
     )
+    await _track_cert_event(result["certificate_id"], "issued", "manual")
     return {"message": "Certificate generated", **result}
 
 
 @router.post("/{event_id}/generate/manual-bulk")
 async def generate_manual_bulk(event_id: str, payload: ManualBulkGenerateRequest, current_user: Any = Depends(get_current_user)):
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
+    await _require_event_access(event_id, current_user, {"issuer"})
 
     results = []
     if not payload.participants:
@@ -303,65 +358,83 @@ async def generate_manual_bulk(event_id: str, payload: ManualBulkGenerateRequest
             role=p.role.strip() if p.role else "",
             email=p.email.strip() if p.email else "",
         )
+        await _track_cert_event(generated["certificate_id"], "issued", "manual-bulk")
         results.append(generated)
 
     return {"message": f"Generated {len(results)} certificates", "certificates": results}
 
 
+@router.post("/{event_id}/generate/api")
+async def generate_via_api(event_id: str, payload: APIIssueRequest, x_api_key: str = Header(default="")):
+    db = get_database()
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    key_hash = _hash_api_key(x_api_key)
+    key_doc = await db.api_keys.find_one({"event_id": event_id, "key_hash": key_hash, "is_active": True})
+    if not key_doc:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    result = await generate_single_manual_certificate(
+        event_id=event_id,
+        participant_name=payload.participant_name.strip(),
+        event_name=payload.event_name.strip(),
+        organization=payload.organization.strip(),
+        date_text=payload.date_text.strip(),
+        template_id=payload.template_id.strip(),
+        role=payload.role.strip(),
+        email=payload.email.strip() if payload.email else "",
+    )
+    await _track_cert_event(result["certificate_id"], "issued", "api")
+    return {"message": "Certificate generated", **result}
+
+
 @router.post("/{event_id}/certificates/{cert_id}/send-email")
 async def send_manual_email(event_id: str, cert_id: str, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer"})
     db = get_database()
     cert = await db.certificates.find_one({"id": cert_id, "event_id": event_id})
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
-    
-    # Try to find user email in metadata or participants collection
+
     meta = cert.get("metadata", {})
     target_email = ""
-    
-    # Check if we have email in metadata or if we can find participant
+
     participant = await db.participants.find_one({"certificate_id": cert_id})
     if participant:
         target_email = participant.get("email", "")
-    
-    # Check metadata if participant collection failed
+
     if not target_email:
         target_email = meta.get("email", "")
-    
+
     if not target_email:
-         raise HTTPException(status_code=400, detail="No email address found for this certificate. Please ensure participant has an email.")
+        raise HTTPException(status_code=400, detail="No email address found for this certificate. Please ensure participant has an email.")
 
     event_name = meta.get("event_name", "Event")
     org = meta.get("organization", "Organization")
     subject = f"Your Certificate for {event_name}"
     body = f"Hello {cert['participant_name']},\n\nAttached is your certificate for {event_name}.\n\nBest regards,\n{org}"
-    
-    from app.services.email_service import send_certificate_email
-    from app.services.email_service import send_certificate_email
+
     from app.core.config import settings
-    
+
     if not settings.SMTP_HOST or not settings.SMTP_USER or not settings.SMTP_PASSWORD:
         raise HTTPException(
-            status_code=400, 
-            detail="SMTP is not configured. Please add SMTP_USER and SMTP_PASSWORD to your .env file."
+            status_code=400,
+            detail="SMTP is not configured. Please add SMTP_USER and SMTP_PASSWORD to your .env file.",
         )
 
     success = await send_certificate_email(target_email, subject, body, cert["file_path"])
-    
+
     if success:
+        await _track_cert_event(cert_id, "emailed", "manual")
         return {"message": f"Email sent to {target_email}"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to send email")
+
+    raise HTTPException(status_code=500, detail="Failed to send email")
 
 
 @router.post("/{event_id}/generate")
 async def generate_certificates(event_id: str, background_tasks: BackgroundTasks, current_user: Any = Depends(get_current_user)):
-    db = get_database()
-    if not ObjectId.is_valid(event_id):
-        raise HTTPException(status_code=400, detail="Invalid event ID")
-    event = await db.events.find_one({"_id": ObjectId(event_id)})
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+    event, _ = await _require_event_access(event_id, current_user, {"issuer"})
     if "template_path" not in event:
         raise HTTPException(status_code=400, detail="Please upload a template first")
     background_tasks.add_task(process_certificate_generation, event_id)
@@ -370,6 +443,7 @@ async def generate_certificates(event_id: str, background_tasks: BackgroundTasks
 
 @router.get("/{event_id}/download")
 async def download_certificates(event_id: str, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer", "viewer"})
     db = get_database()
     cursor = db.certificates.find({"event_id": event_id})
     certs = await cursor.to_list(length=None)
@@ -384,3 +458,120 @@ async def download_certificates(event_id: str, current_user: Any = Depends(get_c
             if file_path and os.path.exists(file_path):
                 zipf.write(file_path, os.path.basename(file_path))
     return FileResponse(zip_path, media_type="application/zip", filename=zip_filename)
+
+
+@router.get("/{event_id}/team")
+async def get_team(event_id: str, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    db = get_database()
+    team_docs = await db.team_members.find({"event_id": event_id}).to_list(length=200)
+    user_ids = [ObjectId(t["member_user_id"]) for t in team_docs if ObjectId.is_valid(t["member_user_id"])]
+    users = await db.users.find({"_id": {"$in": user_ids}}).to_list(length=200) if user_ids else []
+    by_id = {str(u["_id"]): u for u in users}
+
+    out = []
+    for t in team_docs:
+        u = by_id.get(t["member_user_id"], {})
+        out.append(
+            {
+                "member_user_id": t["member_user_id"],
+                "role": t.get("role", "viewer"),
+                "name": u.get("name", "Unknown"),
+                "email": u.get("email", ""),
+            }
+        )
+    return {"team": out}
+
+
+@router.post("/{event_id}/team")
+async def add_team_member(event_id: str, payload: TeamMemberCreate, current_user: Any = Depends(get_current_user)):
+    _, role = await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can manage team")
+
+    db = get_database()
+    user = await db.users.find_one({"email": payload.email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    team_role = payload.role if payload.role in {"admin", "issuer", "viewer"} else "viewer"
+    await db.team_members.update_one(
+        {"event_id": event_id, "member_user_id": str(user["_id"])},
+        {"$set": {"role": team_role, "updated_at": datetime.utcnow()}, "$setOnInsert": {"created_at": datetime.utcnow()}},
+        upsert=True,
+    )
+    return {"message": "Team member added"}
+
+
+@router.patch("/{event_id}/team/{member_user_id}")
+async def update_team_member(event_id: str, member_user_id: str, payload: TeamMemberUpdate, current_user: Any = Depends(get_current_user)):
+    _, role = await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can manage team")
+
+    if payload.role not in {"admin", "issuer", "viewer"}:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    db = get_database()
+    result = await db.team_members.update_one(
+        {"event_id": event_id, "member_user_id": member_user_id},
+        {"$set": {"role": payload.role, "updated_at": datetime.utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    return {"message": "Team member updated"}
+
+
+@router.delete("/{event_id}/team/{member_user_id}")
+async def remove_team_member(event_id: str, member_user_id: str, current_user: Any = Depends(get_current_user)):
+    _, role = await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can manage team")
+
+    db = get_database()
+    await db.team_members.delete_one({"event_id": event_id, "member_user_id": member_user_id})
+    return {"message": "Team member removed"}
+
+
+@router.post("/{event_id}/api-keys")
+async def create_api_key(event_id: str, current_user: Any = Depends(get_current_user)):
+    _, role = await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can manage API keys")
+
+    db = get_database()
+    raw_key = f"cf_{secrets.token_urlsafe(32)}"
+    key_hash = _hash_api_key(raw_key)
+    await db.api_keys.insert_one(
+        {
+            "event_id": event_id,
+            "key_hash": key_hash,
+            "created_by": str(current_user.get("_id")),
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+        }
+    )
+    return {"api_key": raw_key}
+
+
+@router.get("/{event_id}/analytics")
+async def event_analytics(event_id: str, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    db = get_database()
+
+    certs = await db.certificates.find({"event_id": event_id}).to_list(length=None)
+    cert_ids = [c["id"] for c in certs]
+
+    issued = len(certs)
+    verified = await db.certificate_events.count_documents({"cert_id": {"$in": cert_ids}, "event_type": "verified"}) if cert_ids else 0
+    opened = await db.certificate_events.count_documents({"cert_id": {"$in": cert_ids}, "event_type": "opened"}) if cert_ids else 0
+    shared = await db.certificate_events.count_documents({"cert_id": {"$in": cert_ids}, "event_type": "shared"}) if cert_ids else 0
+    emailed = await db.certificate_events.count_documents({"cert_id": {"$in": cert_ids}, "event_type": "emailed"}) if cert_ids else 0
+
+    return {
+        "issued": issued,
+        "opened": opened,
+        "shared": shared,
+        "verified": verified,
+        "emailed": emailed,
+    }

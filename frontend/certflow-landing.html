@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CertFlow — Issue Beautiful Certificates at Scale</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --ink: #0d1117;
+    --paper: #f8f6f1;
+    --teal: #0e9a7f;
+    --teal-light: #12c49f;
+    --gold: #c9a84c;
+    --muted: #6b7280;
+    --card: #ffffff;
+    --border: #e5e0d8;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    overflow-x: hidden;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.1rem 4rem;
+    background: rgba(248,246,241,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem; font-weight: 900; color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--teal); }
+  nav ul { list-style: none; display: flex; gap: 2.5rem; }
+  nav ul a { text-decoration: none; color: var(--muted); font-size: 0.92rem; font-weight: 500; transition: color 0.2s; }
+  nav ul a:hover { color: var(--ink); }
+  .nav-cta {
+    background: var(--ink); color: #fff;
+    padding: 0.6rem 1.4rem; border-radius: 6px;
+    text-decoration: none; font-size: 0.88rem; font-weight: 600;
+    transition: background 0.2s;
+  }
+  .nav-cta:hover { background: var(--teal); }
+
+  /* HERO */
+  .hero {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 8rem 4rem 4rem;
+    position: relative; overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 70% 40%, rgba(14,154,127,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 20% 70%, rgba(201,168,76,0.07) 0%, transparent 55%);
+  }
+  .hero-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 5rem; max-width: 1200px; width: 100%;
+    position: relative; z-index: 1; align-items: center;
+  }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: rgba(14,154,127,0.1); border: 1px solid rgba(14,154,127,0.25);
+    color: var(--teal); font-size: 0.8rem; font-weight: 600;
+    padding: 0.35rem 0.9rem; border-radius: 100px;
+    margin-bottom: 1.5rem; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2.8rem, 5vw, 4.2rem);
+    font-weight: 900; line-height: 1.1;
+    letter-spacing: -1.5px; margin-bottom: 1.5rem;
+  }
+  .hero h1 em { font-style: italic; color: var(--teal); }
+  .hero p {
+    font-size: 1.1rem; color: var(--muted); line-height: 1.7;
+    max-width: 480px; margin-bottom: 2.5rem;
+  }
+  .hero-actions { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--teal); color: #fff;
+    padding: 0.85rem 2rem; border-radius: 8px;
+    text-decoration: none; font-weight: 600; font-size: 1rem;
+    transition: all 0.2s; box-shadow: 0 4px 20px rgba(14,154,127,0.3);
+  }
+  .btn-primary:hover { background: var(--teal-light); transform: translateY(-1px); }
+  .btn-ghost {
+    color: var(--ink); text-decoration: none;
+    font-weight: 500; font-size: 0.95rem;
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.85rem 1.2rem;
+  }
+  .btn-ghost:hover { color: var(--teal); }
+  .hero-stats {
+    display: flex; gap: 2.5rem; margin-top: 3rem;
+    padding-top: 2rem; border-top: 1px solid var(--border);
+  }
+  .stat-item h3 { font-size: 1.8rem; font-weight: 700; color: var(--ink); }
+  .stat-item p { font-size: 0.82rem; color: var(--muted); font-weight: 500; margin-top: 2px; }
+
+  /* CERTIFICATE PREVIEW CARD */
+  .cert-preview {
+    position: relative;
+  }
+  .cert-float {
+    background: #fff;
+    border-radius: 16px;
+    padding: 2.5rem;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05);
+    position: relative;
+    animation: float 5s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(-1deg); }
+    50% { transform: translateY(-12px) rotate(-1deg); }
+  }
+  .cert-inner {
+    border: 2px solid var(--gold);
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    background: linear-gradient(135deg, #fffef9, #fff);
+  }
+  .cert-corner {
+    position: absolute; width: 20px; height: 20px;
+    border-color: var(--gold);
+  }
+  .cert-corner.tl { top: 8px; left: 8px; border-top: 3px solid; border-left: 3px solid; }
+  .cert-corner.tr { top: 8px; right: 8px; border-top: 3px solid; border-right: 3px solid; }
+  .cert-corner.bl { bottom: 8px; left: 8px; border-bottom: 3px solid; border-left: 3px solid; }
+  .cert-corner.br { bottom: 8px; right: 8px; border-bottom: 3px solid; border-right: 3px solid; }
+  .cert-logo-circle {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--teal); display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 1rem; color: white; font-size: 1.2rem;
+  }
+  .cert-title-label {
+    font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: 0.5rem;
+  }
+  .cert-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem; font-weight: 700; color: var(--teal);
+    margin-bottom: 1rem;
+  }
+  .cert-body { font-size: 0.82rem; color: #888; margin-bottom: 0.3rem; }
+  .cert-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem; font-weight: 900; color: var(--ink);
+    margin: 0.6rem 0;
+  }
+  .cert-event { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.2rem; }
+  .cert-event strong { color: var(--ink); }
+  .cert-meta {
+    display: flex; justify-content: space-between;
+    border-top: 1px solid #f0ece3;
+    padding-top: 1rem; margin-top: 0.5rem;
+  }
+  .cert-meta-item { font-size: 0.72rem; color: var(--muted); text-align: center; }
+  .cert-meta-item strong { display: block; color: var(--ink); font-size: 0.78rem; }
+  .verified-badge {
+    position: absolute; top: -14px; right: 20px;
+    background: var(--teal); color: #fff;
+    font-size: 0.72rem; font-weight: 700;
+    padding: 0.3rem 0.8rem; border-radius: 100px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .cert-share-row {
+    display: flex; gap: 0.6rem; margin-top: 1.2rem; flex-wrap: wrap;
+  }
+  .share-btn {
+    flex: 1; padding: 0.5rem; border-radius: 6px;
+    border: 1px solid var(--border); background: #fafafa;
+    font-size: 0.72rem; font-weight: 600; cursor: pointer;
+    color: var(--muted); transition: all 0.15s;
+    text-align: center;
+  }
+  .share-btn:hover { background: var(--teal); color: #fff; border-color: var(--teal); }
+
+  /* LOGOS STRIP */
+  .logos-strip {
+    background: #fff; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 1.5rem 4rem;
+    display: flex; align-items: center; justify-content: center; gap: 3rem;
+    overflow: hidden;
+  }
+  .logos-strip p { font-size: 0.78rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .org-pill {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.4rem 1rem; border-radius: 100px;
+    background: var(--paper); border: 1px solid var(--border);
+    font-size: 0.8rem; font-weight: 600; color: var(--ink); white-space: nowrap;
+  }
+  .org-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
+
+  /* HOW IT WORKS */
+  .section { padding: 6rem 4rem; max-width: 1200px; margin: 0 auto; }
+  .section-tag {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--teal); margin-bottom: 1rem;
+  }
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 3.5vw, 2.8rem);
+    font-weight: 900; letter-spacing: -1px; margin-bottom: 1rem;
+    line-height: 1.15;
+  }
+  .section-sub { font-size: 1rem; color: var(--muted); max-width: 500px; line-height: 1.7; }
+  .steps-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem; margin-top: 4rem;
+  }
+  .step-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 16px; padding: 2rem 1.5rem;
+    position: relative; transition: box-shadow 0.2s;
+  }
+  .step-card:hover { box-shadow: 0 8px 40px rgba(0,0,0,0.07); }
+  .step-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 3rem; font-weight: 900;
+    color: rgba(14,154,127,0.15); line-height: 1;
+    margin-bottom: 1rem;
+  }
+  .step-icon {
+    width: 42px; height: 42px; border-radius: 10px;
+    background: rgba(14,154,127,0.1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; margin-bottom: 1.2rem;
+  }
+  .step-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .step-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+  /* FEATURES */
+  .features-section { background: var(--ink); padding: 6rem 4rem; }
+  .features-inner { max-width: 1200px; margin: 0 auto; }
+  .features-section .section-tag { color: var(--teal-light); }
+  .features-section .section-title { color: #fff; }
+  .features-section .section-sub { color: rgba(255,255,255,0.5); }
+  .features-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem; margin-top: 4rem;
+  }
+  .feature-card {
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 2rem;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .feature-card:hover { border-color: var(--teal); background: rgba(14,154,127,0.06); }
+  .feature-icon { font-size: 1.8rem; margin-bottom: 1.2rem; }
+  .feature-card h3 { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+  .feature-card p { font-size: 0.85rem; color: rgba(255,255,255,0.5); line-height: 1.6; }
+  .feature-badge {
+    display: inline-block; margin-top: 0.8rem;
+    background: rgba(14,154,127,0.2); color: var(--teal-light);
+    font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.6rem;
+    border-radius: 4px; letter-spacing: 0.5px;
+  }
+
+  /* PROFILE SECTION */
+  .profile-section { padding: 6rem 4rem; }
+  .profile-inner { max-width: 1200px; margin: 0 auto; }
+  .profile-demo-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 5rem; margin-top: 4rem; align-items: center;
+  }
+  .profile-card-demo {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 20px; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+  }
+  .profile-header-demo {
+    background: linear-gradient(135deg, var(--teal), #0a7a63);
+    padding: 2rem; color: white; text-align: center;
+  }
+  .profile-avatar {
+    width: 70px; height: 70px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); margin: 0 auto 1rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem; border: 3px solid rgba(255,255,255,0.4);
+  }
+  .profile-header-demo h3 { font-family: 'Playfair Display', serif; font-size: 1.3rem; font-weight: 700; }
+  .profile-header-demo p { font-size: 0.82rem; opacity: 0.8; margin-top: 0.3rem; }
+  .profile-url { font-size: 0.75rem; opacity: 0.7; margin-top: 0.5rem; }
+  .profile-body { padding: 1.5rem; }
+  .mini-cert-row { display: flex; flex-direction: column; gap: 0.8rem; }
+  .mini-cert {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.8rem; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--paper);
+  }
+  .mini-cert-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--teal); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; flex-shrink: 0;
+  }
+  .mini-cert-info h4 { font-size: 0.82rem; font-weight: 700; }
+  .mini-cert-info p { font-size: 0.72rem; color: var(--muted); }
+  .mini-cert-meta { margin-left: auto; font-size: 0.7rem; color: var(--muted); text-align: right; }
+  .profile-text-points { display: flex; flex-direction: column; gap: 1.5rem; }
+  .point-item { display: flex; gap: 1rem; align-items: flex-start; }
+  .point-icon {
+    width: 40px; height: 40px; flex-shrink: 0;
+    background: rgba(14,154,127,0.1); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  }
+  .point-item h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.3rem; }
+  .point-item p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+  /* PRICING */
+  .pricing-section { background: var(--paper); padding: 6rem 4rem; border-top: 1px solid var(--border); }
+  .pricing-inner { max-width: 1100px; margin: 0 auto; }
+  .pricing-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem; margin-top: 4rem;
+  }
+  .price-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 20px; padding: 2.5rem 2rem;
+    position: relative;
+  }
+  .price-card.featured {
+    border-color: var(--teal);
+    box-shadow: 0 0 0 4px rgba(14,154,127,0.08);
+  }
+  .price-badge {
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    background: var(--teal); color: #fff;
+    font-size: 0.72rem; font-weight: 700; padding: 0.3rem 1rem;
+    border-radius: 100px; white-space: nowrap;
+  }
+  .price-tier { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .price-amount { font-family: 'Playfair Display', serif; font-size: 3rem; font-weight: 900; margin: 0.8rem 0 0.2rem; }
+  .price-amount span { font-size: 1rem; font-family: 'DM Sans', sans-serif; font-weight: 400; color: var(--muted); }
+  .price-desc { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; }
+  .price-features { list-style: none; display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 2rem; }
+  .price-features li { font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; }
+  .price-features li::before { content: "✓"; color: var(--teal); font-weight: 700; }
+  .price-features li.off { color: var(--muted); }
+  .price-features li.off::before { content: "—"; color: var(--border); }
+  .price-btn {
+    display: block; text-align: center; padding: 0.8rem;
+    border-radius: 8px; font-weight: 600; font-size: 0.9rem;
+    text-decoration: none; border: 2px solid var(--border);
+    color: var(--ink); transition: all 0.2s;
+  }
+  .price-btn.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .price-btn:hover { border-color: var(--teal); color: var(--teal); }
+  .price-btn.primary:hover { background: var(--teal-light); border-color: var(--teal-light); color: #fff; }
+
+  /* CTA */
+  .cta-section {
+    background: linear-gradient(135deg, var(--ink) 0%, #1a2a25 100%);
+    padding: 6rem 4rem; text-align: center;
+  }
+  .cta-section h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 4vw, 3rem); font-weight: 900;
+    color: #fff; margin-bottom: 1rem; letter-spacing: -1px;
+  }
+  .cta-section h2 em { font-style: italic; color: var(--teal-light); }
+  .cta-section p { color: rgba(255,255,255,0.5); margin-bottom: 2.5rem; font-size: 1rem; }
+  .cta-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+  /* FOOTER */
+  footer {
+    background: #0a0f0d; padding: 3rem 4rem;
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  footer .logo { color: #fff; font-size: 1.2rem; }
+  footer p { font-size: 0.8rem; color: rgba(255,255,255,0.3); }
+
+  /* LIVE COUNTER */
+  .live-counter {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: rgba(14,154,127,0.1); border: 1px solid rgba(14,154,127,0.2);
+    padding: 0.4rem 1rem; border-radius: 100px;
+    font-size: 0.82rem; font-weight: 600; color: var(--teal);
+    margin-bottom: 1rem;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--teal); animation: blink 1.5s infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+  @media (max-width: 900px) {
+    nav { padding: 1rem 2rem; }
+    nav ul { display: none; }
+    .hero { padding: 7rem 2rem 3rem; }
+    .hero-grid, .profile-demo-grid { grid-template-columns: 1fr; }
+    .steps-grid { grid-template-columns: 1fr 1fr; }
+    .features-grid { grid-template-columns: 1fr 1fr; }
+    .pricing-grid { grid-template-columns: 1fr; }
+    .section, .pricing-section, .profile-section, .cta-section { padding: 4rem 2rem; }
+    footer { flex-direction: column; gap: 1rem; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">Cert<span>Flow</span></div>
+  <ul>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#profiles">Profiles</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+  </ul>
+  <a class="nav-cta" href="#">Start Free →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid">
+    <div class="hero-left">
+      <div class="hero-tag">🏆 Trusted by 500+ institutions</div>
+      <h1>Issue <em>beautiful</em> certificates. Build lasting credentials.</h1>
+      <p>CertFlow lets any organization issue, manage, and verify digital certificates at scale — while giving recipients a public profile to showcase their achievements forever.</p>
+      <div class="hero-actions">
+        <a class="btn-primary" href="#">Start for Free</a>
+        <a class="btn-ghost" href="#">▶ Watch demo</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-item"><h3>2.4M+</h3><p>Certificates issued</p></div>
+        <div class="stat-item"><h3>18K+</h3><p>Organizations</p></div>
+        <div class="stat-item"><h3>99.9%</h3><p>Delivery rate</p></div>
+      </div>
+    </div>
+    <div class="cert-preview">
+      <div class="cert-float">
+        <div class="verified-badge">✓ Verified</div>
+        <div class="cert-inner">
+          <div class="cert-corner tl"></div>
+          <div class="cert-corner tr"></div>
+          <div class="cert-corner bl"></div>
+          <div class="cert-corner br"></div>
+          <div class="cert-logo-circle">🎓</div>
+          <div class="cert-title-label">Certificate of Achievement</div>
+          <div class="cert-headline">Certificate of Achievement</div>
+          <div class="cert-body">This certifies that</div>
+          <div class="cert-name">Priya Sharma</div>
+          <div class="cert-event">has contributed as a <strong>Speaker</strong><br>at <strong>Annual AI Hackathon 2026</strong></div>
+          <div class="cert-meta">
+            <div class="cert-meta-item"><strong>Mar 10, 2026</strong>Issued</div>
+            <div class="cert-meta-item"><strong>IIT Delhi</strong>Organization</div>
+            <div class="cert-meta-item"><strong>Dr. Ravi K.</strong>Director</div>
+          </div>
+        </div>
+        <div class="cert-share-row">
+          <div class="share-btn">🔗 Share</div>
+          <div class="share-btn">in LinkedIn</div>
+          <div class="share-btn">⬇ Download</div>
+          <div class="share-btn">✓ Verify</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGOS STRIP -->
+<div class="logos-strip">
+  <p>TRUSTED BY</p>
+  <div class="org-pill"><span class="org-dot"></span> IIT Bombay</div>
+  <div class="org-pill"><span class="org-dot"></span> TechFest Delhi</div>
+  <div class="org-pill"><span class="org-dot"></span> Nasscom Foundation</div>
+  <div class="org-pill"><span class="org-dot"></span> Google DSC India</div>
+  <div class="org-pill"><span class="org-dot"></span> FICCI</div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="section-tag">How it works</div>
+  <div class="section-title">From zero to 10,000 certificates<br>in under 10 minutes.</div>
+  <p class="section-sub">No design skills needed. No complex setup. Just fast, beautiful, verifiable certificates for everyone.</p>
+  <div class="steps-grid">
+    <div class="step-card">
+      <div class="step-num">01</div>
+      <div class="step-icon">🎨</div>
+      <h3>Design your template</h3>
+      <p>Use AI to generate a stunning certificate design, or upload your own. Add your logo, signature, and brand colors.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">02</div>
+      <div class="step-icon">📋</div>
+      <h3>Upload recipient data</h3>
+      <p>Drop a CSV file with names, emails, and roles. Or paste a list manually. Or connect via API for full automation.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">03</div>
+      <div class="step-icon">⚡</div>
+      <h3>Issue in bulk</h3>
+      <p>Click one button. CertFlow generates every certificate, assigns a unique verification hash, and emails them instantly.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-num">04</div>
+      <div class="step-icon">🌐</div>
+      <h3>Recipients share publicly</h3>
+      <p>Each recipient gets a public profile URL. They can share on LinkedIn, Twitter, or embed on their portfolio.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES (dark) -->
+<section class="features-section" id="features">
+  <div class="features-inner">
+    <div class="section-tag">Features</div>
+    <div class="section-title" style="color:#fff;">Everything you need.<br>Nothing you don't.</div>
+    <p class="section-sub">Built for colleges, companies, and clubs — at any scale.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3>AI Certificate Designer</h3>
+        <p>Describe your event and CertFlow generates a polished, print-ready certificate design in seconds.</p>
+        <span class="feature-badge">AI-Powered</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Bulk CSV Issuance</h3>
+        <p>Upload a spreadsheet. Get 10,000 personalized, signed certificates in minutes. Background processing, zero manual work.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔐</div>
+        <h3>Tamper-Proof Verification</h3>
+        <p>Every certificate gets a unique SHA-256 hash. Anyone can verify authenticity in one click via QR or URL.</p>
+        <span class="feature-badge">Blockchain-ready</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👤</div>
+        <h3>Public Credential Profiles</h3>
+        <p>Like Credly, but faster. Recipients get a public profile at certflow.io/@username to showcase all their certificates.</p>
+        <span class="feature-badge">Coming soon</span>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📧</div>
+        <h3>Automated Email Delivery</h3>
+        <p>Branded emails land in every recipient's inbox. Track opens, views, and shares from your dashboard.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>LinkedIn Integration</h3>
+        <p>Recipients add their certificate to LinkedIn with one click. Auto-filled title, org, date, and credential URL.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PUBLIC PROFILE SECTION -->
+<section class="profile-section" id="profiles">
+  <div class="profile-inner">
+    <div class="section-tag">Public Profiles</div>
+    <div class="section-title">Your achievements,<br>always shareable.</div>
+    <div class="profile-demo-grid">
+      <div>
+        <div class="profile-text-points">
+          <div class="point-item">
+            <div class="point-icon">🌐</div>
+            <div>
+              <h4>A permanent public URL</h4>
+              <p>Every recipient gets certflow.io/@theirname — a living portfolio of verified credentials, forever accessible.</p>
+            </div>
+          </div>
+          <div class="point-item">
+            <div class="point-icon">in</div>
+            <div>
+              <h4>One-click LinkedIn sharing</h4>
+              <p>Add any certificate directly to the LinkedIn Licenses & Certifications section. All fields pre-filled automatically.</p>
+            </div>
+          </div>
+          <div class="point-item">
+            <div class="point-icon">🛡️</div>
+            <div>
+              <h4>Verified badges, not just images</h4>
+              <p>Unlike a PDF, CertFlow credentials are live-verified. Employers and institutions can check authenticity instantly.</p>
+            </div>
+          </div>
+          <div class="point-item">
+            <div class="point-icon">🎛️</div>
+            <div>
+              <h4>Privacy controls</h4>
+              <p>Recipients choose which certificates to show publicly. Full control over their credential visibility.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-card-demo">
+        <div class="profile-header-demo">
+          <div class="profile-avatar">👩‍💻</div>
+          <h3>Priya Sharma</h3>
+          <p>Computer Science · IIT Bombay '25</p>
+          <div class="profile-url">certflow.io/@priyasharma</div>
+        </div>
+        <div class="profile-body">
+          <div class="mini-cert-row">
+            <div class="mini-cert">
+              <div class="mini-cert-icon">🏆</div>
+              <div class="mini-cert-info">
+                <h4>Speaker · Annual AI Hackathon</h4>
+                <p>IIT Delhi</p>
+              </div>
+              <div class="mini-cert-meta">Mar 2026<br><span style="color:var(--teal);font-weight:700">✓ Verified</span></div>
+            </div>
+            <div class="mini-cert">
+              <div class="mini-cert-icon">🎓</div>
+              <div class="mini-cert-info">
+                <h4>Winner · Smart India Hackathon</h4>
+                <p>MoE, India</p>
+              </div>
+              <div class="mini-cert-meta">Dec 2025<br><span style="color:var(--teal);font-weight:700">✓ Verified</span></div>
+            </div>
+            <div class="mini-cert">
+              <div class="mini-cert-icon">⭐</div>
+              <div class="mini-cert-info">
+                <h4>Volunteer · TEDxIITB 2025</h4>
+                <p>TEDx Organization</p>
+              </div>
+              <div class="mini-cert-meta">Aug 2025<br><span style="color:var(--teal);font-weight:700">✓ Verified</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing-section" id="pricing">
+  <div class="pricing-inner">
+    <div style="text-align:center; margin-bottom: 0;">
+      <div class="section-tag" style="justify-content:center; display:flex;">Pricing</div>
+      <div class="section-title" style="text-align:center;">Simple, honest pricing.</div>
+      <p class="section-sub" style="margin:0 auto; text-align:center;">Start free. Scale as you grow. No per-certificate fees on paid plans.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-tier">Starter</div>
+        <div class="price-amount">₹0 <span>/ month</span></div>
+        <div class="price-desc">Perfect for small clubs and events</div>
+        <ul class="price-features">
+          <li>100 certificates / month</li>
+          <li>3 templates</li>
+          <li>Basic verify page</li>
+          <li>Email delivery</li>
+          <li class="off">Public recipient profiles</li>
+          <li class="off">Custom domain</li>
+          <li class="off">API access</li>
+        </ul>
+        <a class="price-btn" href="#">Get started free</a>
+      </div>
+      <div class="price-card featured">
+        <div class="price-badge">Most Popular</div>
+        <div class="price-tier">Pro</div>
+        <div class="price-amount">₹999 <span>/ month</span></div>
+        <div class="price-desc">For colleges, companies & active orgs</div>
+        <ul class="price-features">
+          <li>Unlimited certificates</li>
+          <li>AI template generator</li>
+          <li>Public recipient profiles</li>
+          <li>LinkedIn integration</li>
+          <li>Analytics dashboard</li>
+          <li>Email tracking</li>
+          <li class="off">Custom domain</li>
+        </ul>
+        <a class="price-btn primary" href="#">Start Pro trial</a>
+      </div>
+      <div class="price-card">
+        <div class="price-tier">Enterprise</div>
+        <div class="price-amount">Custom</div>
+        <div class="price-desc">For large institutions & corporates</div>
+        <ul class="price-features">
+          <li>Everything in Pro</li>
+          <li>Custom domain & branding</li>
+          <li>API & webhook access</li>
+          <li>SSO / SAML login</li>
+          <li>SLA & priority support</li>
+          <li>Blockchain anchoring</li>
+          <li>Dedicated account manager</li>
+        </ul>
+        <a class="price-btn" href="#">Contact sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>Ready to issue your first <em>beautiful</em> certificate?</h2>
+  <p>Join 18,000+ organizations already using CertFlow. Free forever for small orgs.</p>
+  <div class="cta-btns">
+    <a class="btn-primary" href="#">Start for Free — No credit card</a>
+    <a href="#" style="color:rgba(255,255,255,0.5); text-decoration:none; font-size:0.95rem; padding: 0.85rem 1rem;">Book a demo →</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="logo">Cert<span style="color:var(--teal)">Flow</span></div>
+  <p>© 2026 CertFlow. Issue with confidence.</p>
+  <p style="font-size:0.75rem; color:rgba(255,255,255,0.2);">Privacy · Terms · Contact</p>
+</footer>
+
+</body>
+</html>
