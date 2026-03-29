@@ -1,16 +1,17 @@
 import io
 import os
 import zipfile
+import aiohttp
 from datetime import datetime
 import logging
-from typing import Any, List
+from typing import Any, List, Optional
 import hashlib
 import secrets
 
 logger = logging.getLogger(__name__)
 import pandas as pd
 from bson import ObjectId
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -287,6 +288,25 @@ async def update_authority(event_id: str, payload: EventAuthorityUpdate, current
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Authority updated successfully"}
+
+
+class LogoPositionUpdate(BaseModel):
+    x: float = Field(..., ge=0, le=1, description="X position as fraction of certificate width (0=left, 1=right)")
+    y: float = Field(..., ge=0, le=1, description="Y position as fraction of certificate height (0=bottom, 1=top)")
+    size: float = Field(default=0.25, ge=0.05, le=0.5, description="Logo size as fraction of certificate width")
+
+
+@router.patch("/{event_id}/logo-position")
+async def update_logo_position(event_id: str, payload: LogoPositionUpdate, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer"})
+    db = get_database()
+    result = await db.events.update_one(
+        {"_id": ObjectId(event_id)},
+        {"$set": {"logo_position": {"x": payload.x, "y": payload.y, "size": payload.size}}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Logo position saved"}
 
 
 @router.post("/{event_id}/participants")
