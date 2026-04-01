@@ -1,4 +1,4 @@
-# Python cache / build artifacts
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -14,25 +14,59 @@ build/
 dist/
 wheels/
 *.egg-info/
-
+C:\Sankhu Codes and Stuff\Others\faltu_delte\certgen\frontend\node_modules
 # Virtual environments
 .venv/
 venv/
 
-# Environment and local secrets
+.kiro\specs
+kiro
+.kiro.*
+
+# Environment and secrets
 .env
 .env.*
 !.env.example
-a
-# Runtime-generated project folders
+
+# Runtime-generated folders
 uploads/
 generated_certs/
 temp_qr/
 
-# Logs and editor junk
+# Node
+node_modules/
+frontend/dist/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
 Thumbs.db
-backend/imagegen.py
+
+# Editor
+.vscode/settings.json
+*.swp
+*.swo
 certificate.png
 certificate1.png
+.kiro/specs/live-certificate-preview-panel/design.md
+.kiro/specs/live-certificate-preview-panel/requirements.md
+.kiro/specs/live-certificate-preview-panel/tasks.md
+.kiro/specs/recipient-profile-page/design.md
+.kiro/specs/recipient-profile-page/requirements.md
+.kiro/specs/recipient-profile-page/tasks.md
+frontend/node_modules/flatted/es.js
+frontend/node_modules/flatted/esm.js
+.kiro/specs/recipient-profile-page/.config.kiro
+.kiro/specs/live-certificate-preview-panel/.config.kiro
+frontend/node_modules/flatted/esm.js
+frontend/node_modules/flatted/esm.js
+.kiro/specs/certificate-studio-redesign/design.md
+.kiro/specs/certificate-studio-redesign/tasks.md
+.kiro/specs/certificate-studio-redesign/requirements.md
+frontend/node_modules/flatted/es.js
+frontend/node_modules/flatted/esm.js

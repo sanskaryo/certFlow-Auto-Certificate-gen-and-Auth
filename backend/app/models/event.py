@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Any, Optional
 from datetime import datetime
 
 class EventBase(BaseModel):
@@ -12,6 +12,7 @@ class EventBase(BaseModel):
     signature_path: Optional[str] = None
     authority_name: Optional[str] = None
     authority_position: Optional[str] = None
+    certificate_layout: Optional[dict[str, Any]] = None
 
 class EventCreate(EventBase):
     pass

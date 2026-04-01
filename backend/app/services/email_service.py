@@ -122,10 +122,29 @@ async def send_certificate_email(
 
     # HTML body
     role_line = f'<div class="meta">Role: <strong>{role}</strong></div>' if role else ""
-    linkedin_url = (
-        f"https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME"
-        f"&name={event_name}&organizationName={organization}"
-    )
+    from urllib.parse import urlencode
+    issued_dt = None
+    if date_text:
+        try:
+            from datetime import datetime
+            for fmt in ("%Y-%m-%d", "%B %d, %Y", "%d %B %Y", "%d/%m/%Y"):
+                try:
+                    issued_dt = datetime.strptime(date_text, fmt)
+                    break
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+    linkedin_params = {
+        "startTask": "CERTIFICATION_NAME",
+        "name": event_name or "Event",
+        "organizationName": organization or "Organization",
+        "certUrl": verify_url or "",
+    }
+    if issued_dt:
+        linkedin_params["issueYear"] = str(issued_dt.year)
+        linkedin_params["issueMonth"] = str(issued_dt.month)
+    linkedin_url = "https://www.linkedin.com/profile/add?" + urlencode(linkedin_params)
     html_body = HTML_TEMPLATE.format(
         participant_name=participant_name or to_email.split("@")[0],
         event_name=event_name or "Event",

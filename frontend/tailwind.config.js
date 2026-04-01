@@ -9,6 +9,10 @@ export default {
 
   theme: {
     extend: {
+      fontFamily: {
+        ui: ['Inter', 'Manrope', 'system-ui', 'sans-serif'],
+        cert: ['"Playfair Display"', '"Cormorant Garamond"', 'Georgia', 'serif'],
+      },
       colors: {
         prime: {
           50: '#f0fdfa',
@@ -29,7 +33,28 @@ export default {
           400: '#22d3ee',
           500: '#06b6d4',
           600: '#0891b2',
-        }
+        },
+
+        success: {
+          DEFAULT: '#16a34a',
+          light: '#dcfce7',
+        },
+        warning: {
+          DEFAULT: '#ca8a04',
+          light: '#fef9c3',
+        },
+        error: {
+          DEFAULT: '#dc2626',
+          light: '#fee2e2',
+        },
+        studio: {
+          bg: '#f8fafc',
+          panel: '#ffffff',
+          border: '#e2e8f0',
+          heading: '#0f172a',
+          label: '#475569',
+          muted: '#94a3b8',
+        },
       },
 
       animation: {

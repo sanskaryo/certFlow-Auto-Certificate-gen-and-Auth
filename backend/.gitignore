@@ -1,4 +1,4 @@
-# Python cache / build artifacts
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -19,17 +19,26 @@ wheels/
 .venv/
 venv/
 
-# Environment and local secrets
+# Environment and secrets
 .env
 .env.*
 !.env.example
 
-# Runtime-generated project folders
+# Runtime-generated folders
 uploads/
 generated_certs/
 temp_qr/
 
-# Logs and editor junk
+# uv
+uv.lock
+
+# Logs
 *.log
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Editor
+*.swp
+*.swo

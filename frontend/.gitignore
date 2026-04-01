@@ -1,35 +1,33 @@
-# Python cache / build artifacts
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-.coverage.*
-htmlcov/
-build/
+# Dependencies
+node_modules/
+
+# Build output
 dist/
-wheels/
-*.egg-info/
+dist-ssr/
 
-# Virtual environments
-.venv/
-venv/
-
-# Environment and local secrets
+# Environment and secrets
 .env
 .env.*
 !.env.example
-a
-# Runtime-generated project folders
-uploads/
-generated_certs/
-temp_qr/
 
-# Logs and editor junk
+# Vite
+*.local
+vite.config.d.ts
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
 Thumbs.db
+
+# Editor
+*.swp
+*.swo
+frontend\node_modules

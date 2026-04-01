@@ -59,6 +59,33 @@ def template_catalog() -> list[dict[str, str]]:
     return [{"id": k, "name": k.replace("-", " ").title(), **v} for k, v in TEMPLATE_PRESETS.items()]
 
 
+DEFAULT_CERTIFICATE_LAYOUT: dict[str, dict[str, float]] = {
+    "signature": {"x": 0.66, "y": 0.66, "w": 0.24, "h": 0.12},
+    "authorityName": {"x": 0.78, "y": 0.8, "scale": 1.0},
+    "designation": {"x": 0.78, "y": 0.87, "scale": 0.95},
+    "recipientName": {"x": 0.5, "y": 0.4, "scale": 1.0},
+    "bodyBlock": {"x": 0.5, "y": 0.52, "scale": 1.0},
+    "qr": {"x": 0.82, "y": 0.7, "size": 0.12},
+}
+
+
+def _merge_certificate_layout(raw: dict | None) -> dict[str, dict[str, float]]:
+    base = {k: dict(v) for k, v in DEFAULT_CERTIFICATE_LAYOUT.items()}
+    if not raw:
+        return base
+    for k, v in raw.items():
+        if isinstance(v, dict) and k in base:
+            base[k].update(v)
+        elif isinstance(v, dict):
+            base[k] = v
+    return base
+
+
+def _baseline_from_top(cy: float, height: float, font_size: float) -> float:
+    """cy = fraction from top (0 top, 1 bottom). ReportLab baseline from bottom."""
+    return height * (1.0 - cy) - 0.35 * font_size
+
+
 def _compute_verification_hash(
     participant_name: str,
     event_name: str,
@@ -207,9 +234,11 @@ def _generate_standalone_pdf(
     authority_position: str = None,
     template_path: str = None,
     logo_position: dict = None,
+    certificate_layout: dict | None = None,
 ):
     c = canvas.Canvas(output_path, pagesize=landscape(A4))
     width, height = landscape(A4)
+    L = _merge_certificate_layout(certificate_layout)
     style = TEMPLATE_PRESETS.get(template_id, TEMPLATE_PRESETS["classic-blue"])
     
     logger.info(f"Initializing PDF generation. template_id={template_id}, template_path={template_path}")
@@ -340,41 +369,49 @@ def _generate_standalone_pdf(
     c.setFont(font_main, 18)
     c.drawCentredString(width / 2, height - 180, "This certifies that")
 
-    # Auto-fit participant name so long names never overflow
-    name_font_size = _fit_text(c, participant_name, width - 120, 36, font_bold)
+    rec = L["recipientName"]
+    rx = float(rec["x"]) * width
+    rec_scale = float(rec.get("scale", 1.0))
+    name_font_size = int(_fit_text(c, participant_name, width - 120, 36, font_bold) * rec_scale)
+    name_font_size = max(10, min(48, name_font_size))
     c.setFont(font_bold, name_font_size)
-    c.drawCentredString(width / 2, height - 240, participant_name)
-    
-    # Intelligent Wording
+    c.drawCentredString(rx, _baseline_from_top(float(rec["y"]), height, name_font_size), participant_name)
+
     lines = _get_intelligent_wording(role, event_name)
-    
-    c.setFont(font_main, 18)
-    # Give more room after name
-    y_ptr = height - 300
-    c.drawCentredString(width / 2, y_ptr, lines[0])
-    
-    y_ptr -= 40
+
+    bb = L["bodyBlock"]
+    bb_scale = float(bb.get("scale", 1.0))
+    bx = float(bb["x"]) * width
+    body_font = max(10, int(18 * bb_scale))
+    c.setFont(font_main, body_font)
+    y0 = _baseline_from_top(float(bb["y"]), height, body_font)
+    c.drawCentredString(bx, y0, lines[0])
+
+    line_gap = 40 * bb_scale
+    y_ptr = y0 - line_gap
     if lines[1] and "Role: " not in lines[1]:
-        c.drawCentredString(width / 2, y_ptr, lines[1])
-        y_ptr -= 40
-    
-    c.drawCentredString(width / 2, y_ptr, f"organized by {organization}")
-    
-    # If the second line was just a fallback role display
+        c.drawCentredString(bx, y_ptr, lines[1])
+        y_ptr -= line_gap
+
+    c.drawCentredString(bx, y_ptr, f"organized by {organization}")
+
     if lines[1] and "Role: " in lines[1]:
-        y_ptr -= 40
-        c.setFont(font_bold, 16)
-        c.drawCentredString(width / 2, y_ptr, lines[1])
-    
+        y_ptr -= line_gap
+        c.setFont(font_bold, max(10, int(16 * bb_scale)))
+        c.drawCentredString(bx, y_ptr, lines[1])
 
     c.setFont(font_main, 12)
-    c.drawString(60, 60, f"Certificate ID: {cert_id}")
     c.drawString(width - 240, 60, f"Issued on: {date_text}")
-    # QR code — 1.4 inch for easy scanning
-    qr_size = 1.4 * inch
-    c.drawImage(qr_path, 60, 80, width=qr_size, height=qr_size)
+
+    qr_l = L["qr"]
+    qr_w = float(qr_l["size"]) * width
+    qr_x = float(qr_l["x"]) * width
+    qr_top = float(qr_l["y"])
+    qr_y_pdf = height * (1.0 - qr_top) - qr_w
+    c.drawImage(qr_path, qr_x, qr_y_pdf, width=qr_w, height=qr_w)
     c.setFont(font_main, 8)
-    c.drawCentredString(60 + qr_size / 2, 72, "Scan to verify")
+    c.drawCentredString(qr_x + qr_w / 2, max(36, qr_y_pdf - 8), "Scan to verify")
+    c.drawString(qr_x, max(28, qr_y_pdf - 22), f"Certificate ID: {cert_id}")
     
     if template_id == "traditional-elegant":
         # Draw fake signature lines
@@ -413,37 +450,45 @@ def _generate_standalone_pdf(
     has_sig   = signature_path and os.path.exists(signature_path)
     has_auth  = bool(authority_name or authority_position)
 
-    if has_sig or has_auth:
-        sig_block_w = 2.4 * inch
-        sig_x = width - sig_block_w - 40   # right-aligned with margin
-        sig_y = 130                          # start higher so text isn't cut
+    sig_l = L["signature"]
+    sig_w = float(sig_l["w"]) * width
+    sig_h = float(sig_l["h"]) * height
+    sig_x = float(sig_l["x"]) * width
+    sig_y_top = float(sig_l["y"])
+    sig_img_y = height * (1.0 - sig_y_top) - sig_h
 
-        # Draw signature image
+    if has_sig or has_auth:
         if has_sig:
             try:
-                c.drawImage(signature_path, sig_x, sig_y, width=sig_block_w, height=0.9 * inch, preserveAspectRatio=True, mask='auto')
-                sig_y -= 8
+                c.drawImage(signature_path, sig_x, sig_img_y, width=sig_w, height=sig_h, preserveAspectRatio=True, mask='auto')
                 logger.info(f"Successfully drew signature from {signature_path}")
             except Exception as e:
                 logger.error(f"Failed to draw signature from {signature_path}: {e}")
 
-        # Divider line under signature
-        c.setStrokeColor(style.get("accent", "#9ca3af"))
-        c.setLineWidth(1)
-        c.line(sig_x, sig_y, sig_x + sig_block_w, sig_y)
-        sig_y -= 16
+            line_y = sig_img_y - 4
+            c.setStrokeColor(style.get("accent", "#9ca3af"))
+            c.setLineWidth(1)
+            c.line(sig_x, line_y, sig_x + sig_w, line_y)
 
-        # Authority name — 14pt bold
+        an = L["authorityName"]
+        ap = L["designation"]
         c.setFillColor(style.get("text", "#374151"))
         if authority_name:
-            c.setFont(font_bold, 14)
-            c.drawCentredString(sig_x + sig_block_w / 2, sig_y, authority_name)
-            sig_y -= 16
-
-        # Authority position — 12pt
+            fs = max(8, int(14 * float(an.get("scale", 1.0))))
+            c.setFont(font_bold, fs)
+            c.drawCentredString(
+                width * float(an["x"]),
+                _baseline_from_top(float(an["y"]), height, fs),
+                authority_name,
+            )
         if authority_position:
-            c.setFont(font_main, 12)
-            c.drawCentredString(sig_x + sig_block_w / 2, sig_y, authority_position)
+            fs2 = max(8, int(12 * float(ap.get("scale", 1.0))))
+            c.setFont(font_main, fs2)
+            c.drawCentredString(
+                width * float(ap["x"]),
+                _baseline_from_top(float(ap["y"]), height, fs2),
+                authority_position,
+            )
 
     c.save()
 
@@ -504,6 +549,7 @@ async def generate_single_manual_certificate(
     auth_pos = event.get("authority_position") if event else None
     template_path_db = event.get("template_path") if event else None
     logo_pos = event.get("logo_position") if event else None
+    cert_layout = event.get("certificate_layout") if event else None
 
     # If using AI template, pass the DB template_path
     pass_template_path = template_path_db if template_id == "ai-generated" else None
@@ -525,6 +571,7 @@ async def generate_single_manual_certificate(
             authority_position=auth_pos,
             template_path=pass_template_path,
             logo_position=logo_pos,
+            certificate_layout=cert_layout,
         )
         issued_at = datetime.utcnow()
         if email:

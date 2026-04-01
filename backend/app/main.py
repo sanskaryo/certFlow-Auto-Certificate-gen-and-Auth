@@ -3,6 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import connect_to_mongo, close_mongo_connection
 from app.routers import auth, events, profiles, verification
+from app.routers import settings as settings_router
+from app.routers import analytics
+from app.middleware.custom_domain import CustomDomainMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,6 +22,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CustomDomainMiddleware)
 
 from fastapi.staticfiles import StaticFiles
 import os
@@ -27,6 +31,8 @@ app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(profiles.router)
 app.include_router(verification.router)
+app.include_router(settings_router.router)
+app.include_router(analytics.router)
 
 # Mount uploads directory for previewing AI backgrounds
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")

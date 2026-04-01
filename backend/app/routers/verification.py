@@ -13,6 +13,14 @@ from app.database import get_database
 router = APIRouter(prefix="/verify", tags=["verification"])
 
 
+class OrgBranding(BaseModel):
+    org_name: str | None = None
+    primary_color: str | None = None
+    logo_url: str | None = None
+    white_label: bool = False
+    remove_branding: bool = False
+
+
 class CertificateResponse(BaseModel):
     id: str
     participant_name: str
@@ -26,6 +34,7 @@ class CertificateResponse(BaseModel):
     issuer_position: str | None = None
     has_signature: bool = False
     is_valid: bool
+    branding: OrgBranding | None = None
 
 
 async def _track(cert_id: str, event_type: str, source: str = "verify"):
@@ -77,6 +86,25 @@ async def _build_response(cert: dict) -> CertificateResponse:
     issuer_position = event.get("authority_position") if event else None
     has_signature = bool(event and event.get("signature_path"))
 
+    # Fetch issuer branding
+    branding = None
+    if event:
+        issuer = await db.users.find_one({"_id": event.get("user_id")} if not isinstance(event.get("user_id"), str)
+                                         else {"id": event.get("user_id")})
+        if not issuer:
+            issuer = await db.users.find_one({"_id": ObjectId(event["user_id"])}) if ObjectId.is_valid(str(event.get("user_id", ""))) else None
+        if issuer and (issuer.get("white_label") or issuer.get("custom_domain")):
+            logo_url = None
+            if event.get("logo_path"):
+                logo_url = f"/uploads/{event['logo_path'].split('uploads/')[-1]}" if "uploads/" in str(event.get("logo_path", "")) else None
+            branding = OrgBranding(
+                org_name=issuer.get("org_name_override") or organization,
+                primary_color=issuer.get("primary_color"),
+                logo_url=logo_url,
+                white_label=bool(issuer.get("white_label")),
+                remove_branding=bool(issuer.get("remove_branding")),
+            )
+
     return CertificateResponse(
         id=cert["id"],
         participant_name=cert["participant_name"],
@@ -90,6 +118,7 @@ async def _build_response(cert: dict) -> CertificateResponse:
         issuer_position=issuer_position,
         has_signature=has_signature,
         is_valid=True,
+        branding=branding,
     )
 
 

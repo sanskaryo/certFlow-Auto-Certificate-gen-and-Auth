@@ -309,6 +309,32 @@ async def update_logo_position(event_id: str, payload: LogoPositionUpdate, curre
     return {"message": "Logo position saved"}
 
 
+class CertificateLayoutUpdate(BaseModel):
+    certificate_layout: dict | None = None
+    logo_position: dict | None = None
+
+
+@router.patch("/{event_id}/certificate-layout")
+async def update_certificate_layout(
+    event_id: str,
+    payload: CertificateLayoutUpdate,
+    current_user: Any = Depends(get_current_user),
+):
+    await _require_event_access(event_id, current_user, {"issuer"})
+    update_doc: dict = {}
+    if payload.certificate_layout is not None:
+        update_doc["certificate_layout"] = payload.certificate_layout
+    if payload.logo_position is not None:
+        update_doc["logo_position"] = payload.logo_position
+    if not update_doc:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    db = get_database()
+    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": update_doc})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return {"message": "Certificate layout saved"}
+
+
 @router.post("/{event_id}/participants")
 async def upload_participants(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
     await _require_event_access(event_id, current_user, {"issuer"})
@@ -443,7 +469,18 @@ async def send_manual_email(event_id: str, cert_id: str, current_user: Any = Dep
             detail="SMTP is not configured. Please add SMTP_USER and SMTP_PASSWORD to your .env file.",
         )
 
-    success = await send_certificate_email(target_email, subject, body, cert["file_path"])
+    from app.services.certificate_service import _verify_base_url
+    verify_url = _verify_base_url() + cert_id
+
+    success = await send_certificate_email(
+        target_email, subject, body, cert["file_path"],
+        participant_name=cert.get("participant_name", ""),
+        event_name=event_name,
+        organization=org,
+        date_text=meta.get("date_text", ""),
+        role=meta.get("role", ""),
+        verify_url=verify_url,
+    )
 
     if success:
         await _track_cert_event(cert_id, "emailed", "manual")
@@ -595,3 +632,42 @@ async def event_analytics(event_id: str, current_user: Any = Depends(get_current
         "verified": verified,
         "emailed": emailed,
     }
+
+
+@router.get("/{event_id}/certificates")
+async def list_event_certificates(event_id: str, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    db = get_database()
+
+    certs = await db.certificates.find({"event_id": event_id}).to_list(length=None)
+
+    result = []
+    for c in certs:
+        cert_id = c["id"]
+
+        # view count from certificate_events
+        view_count = await db.certificate_events.count_documents({"cert_id": cert_id, "event_type": "opened"})
+
+        # last verified timestamp
+        last_verified_doc = await db.certificate_events.find_one(
+            {"cert_id": cert_id, "event_type": "verified"},
+            sort=[("timestamp", -1)],
+        )
+        last_verified_at = last_verified_doc["timestamp"].isoformat() if last_verified_doc and last_verified_doc.get("timestamp") else None
+
+        meta = c.get("metadata", {})
+        # try to get email from participants collection first
+        participant = await db.participants.find_one({"certificate_id": cert_id})
+        email = (participant or {}).get("email") or meta.get("email", "")
+
+        result.append({
+            "cert_id": cert_id,
+            "name": c.get("participant_name", ""),
+            "email": email,
+            "role": meta.get("role", ""),
+            "issued_at": c.get("created_at").isoformat() if c.get("created_at") else None,
+            "view_count": view_count,
+            "last_verified_at": last_verified_at,
+        })
+
+    return result
