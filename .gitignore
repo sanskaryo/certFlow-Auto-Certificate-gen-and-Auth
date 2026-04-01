@@ -22,12 +22,12 @@ venv/
 .kiro\specs
 kiro
 .kiro.*
-
+.kiro
 # Environment and secrets
 .env
 .env.*
 !.env.example
-
+.vscode
 # Runtime-generated folders
 uploads/
 generated_certs/
