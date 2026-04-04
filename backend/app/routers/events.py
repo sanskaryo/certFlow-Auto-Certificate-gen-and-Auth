@@ -54,9 +54,9 @@ class ParticipantEntry(BaseModel):
 
 class ManualBulkGenerateRequest(BaseModel):
     participants: List[ParticipantEntry]
-    event_name: str = Field(..., min_length=2)
-    organization: str = Field(..., min_length=2)
-    date_text: str = Field(..., min_length=4)
+    event_name: str = Field(default="")
+    organization: str = Field(default="")
+    date_text: str = Field(default="")
     template_id: str = Field(default="classic-blue")
 
 
@@ -387,20 +387,26 @@ async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequ
 
 @router.post("/{event_id}/generate/manual-bulk")
 async def generate_manual_bulk(event_id: str, payload: ManualBulkGenerateRequest, current_user: Any = Depends(get_current_user)):
-    await _require_event_access(event_id, current_user, {"issuer"})
+    event, _ = await _require_event_access(event_id, current_user, {"issuer"})
 
-    results = []
     if not payload.participants:
         raise HTTPException(status_code=400, detail="At least one participant entry is required")
 
+    # Fill in missing fields from the stored event document
+    event_name = payload.event_name.strip() or event.get("name", "Event")
+    organization = payload.organization.strip() or event.get("organization", "Organization")
+    date_text = payload.date_text.strip() or event.get("date_text", datetime.utcnow().strftime("%Y-%m-%d"))
+    template_id = (payload.template_id or event.get("template_id") or "classic-blue").strip()
+
+    results = []
     for p in payload.participants:
         generated = await generate_single_manual_certificate(
             event_id=event_id,
             participant_name=p.name.strip(),
-            event_name=payload.event_name.strip(),
-            organization=payload.organization.strip(),
-            date_text=payload.date_text.strip(),
-            template_id=payload.template_id.strip(),
+            event_name=event_name,
+            organization=organization,
+            date_text=date_text,
+            template_id=template_id,
             role=p.role.strip() if p.role else "",
             email=p.email.strip() if p.email else "",
         )
@@ -498,6 +504,28 @@ async def generate_certificates(event_id: str, background_tasks: BackgroundTasks
     return {"message": "Certificate generation started in background"}
 
 
+@router.get("/{event_id}/certificates/{cert_id}/download")
+async def download_single_certificate(event_id: str, cert_id: str, current_user: Any = Depends(get_current_user)):
+    await _require_event_access(event_id, current_user, {"issuer", "viewer"})
+    db = get_database()
+    cert = await db.certificates.find_one({"id": cert_id, "event_id": event_id})
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+
+    file_path = cert.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Certificate file not found on server. It may have been deleted.")
+
+    participant_name = cert.get("participant_name", "certificate").replace(" ", "_")
+    filename = f"{participant_name}_{cert_id[:8]}.pdf"
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{event_id}/download")
 async def download_certificates(event_id: str, current_user: Any = Depends(get_current_user)):
     await _require_event_access(event_id, current_user, {"issuer", "viewer"})
@@ -509,12 +537,17 @@ async def download_certificates(event_id: str, current_user: Any = Depends(get_c
 
     zip_filename = f"event_{event_id}_certificates.zip"
     zip_path = os.path.join(UPLOAD_DIR, zip_filename)
+    added = 0
     with zipfile.ZipFile(zip_path, "w") as zipf:
         for cert in certs:
             file_path = cert.get("file_path")
             if file_path and os.path.exists(file_path):
                 zipf.write(file_path, os.path.basename(file_path))
+                added += 1
+    if added == 0:
+        raise HTTPException(status_code=404, detail="Certificate files not found on server.")
     return FileResponse(zip_path, media_type="application/zip", filename=zip_filename)
+
 
 
 @router.get("/{event_id}/team")

@@ -35,7 +35,6 @@ export default function EventDetail() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [eventStats, setEventStats] = useState<any>(null);
   const [progress, setProgress] = useState<{ total: number; success: number; failed: number } | null>(null);
-  const [debouncedPreview, setDebouncedPreview] = useState<PreviewData | null>(null);
   const [appMode, setAppMode] = useState<'wizard' | 'visual_builder'>('wizard');
 
   const authHeaders = useMemo<Record<string, string>>(
@@ -203,13 +202,17 @@ export default function EventDetail() {
         });
       } else if (state.mode === 'bulk') {
         const validLines = state.bulk.parsedLines.filter(l => l.valid);
+        if (validLines.length === 0) throw new Error('No valid recipient entries to generate certificates for.');
         setProgress({ total: validLines.length, success: 0, failed: 0 });
+        // Fall back to eventData values in case the user didn't visit the single-recipient step
+        const org = state.single.organization.trim() || eventData?.organization || eventData?.name || 'Organization';
+        const dateText = state.single.date_text.trim() || eventData?.date_text || new Date().toISOString().split('T')[0];
         const body = {
-          participants: validLines.map(l => ({ name: l.name, email: l.email, role: l.role })),
-          event_name: eventData?.name || '',
-          organization: state.single.organization,
-          date_text: state.single.date_text,
-          template_id: state.branding.templateId,
+          participants: validLines.map(l => ({ name: l.name, email: l.email || '', role: l.role || '' })),
+          event_name: eventData?.name || 'Event',
+          organization: org,
+          date_text: dateText,
+          template_id: state.branding.templateId || 'classic-blue',
         };
         const res = await fetch(`${API}/events/${id}/generate/manual-bulk`, {
           method: 'POST',
@@ -217,7 +220,15 @@ export default function EventDetail() {
           body: JSON.stringify(body),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Bulk generation failed');
+        if (!res.ok) {
+          // FastAPI 422 returns detail as an array of validation error objects
+          const detail = data.detail;
+          if (Array.isArray(detail)) {
+            const msgs = detail.map((d: any) => `${d.loc?.slice(1).join('.')} — ${d.msg}`).join('; ');
+            throw new Error(`Validation error: ${msgs}`);
+          }
+          throw new Error(typeof detail === 'string' ? detail : 'Bulk generation failed');
+        }
         const successCount = data.certificates?.length ?? validLines.length;
         setProgress({ total: validLines.length, success: successCount, failed: validLines.length - successCount });
         dispatch({ type: 'SET_GENERATION_STATUS', status: 'success' });
@@ -257,7 +268,9 @@ export default function EventDetail() {
       }
     } catch (err: any) {
       dispatch({ type: 'SET_GENERATION_STATUS', status: 'error' });
-      notify(err.message || 'Generation failed', 'error');
+      // Ensure we always show a readable string, never [object Object]
+      const msg = typeof err?.message === 'string' ? err.message : 'Generation failed';
+      notify(msg, 'error');
     } finally {
       setIsGenerating(false);
     }

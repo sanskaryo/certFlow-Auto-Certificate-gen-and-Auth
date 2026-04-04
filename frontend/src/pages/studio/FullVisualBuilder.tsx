@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { PreviewData, CertificateLayout, LogoPos, StudioAction } from './types';
 import { API_BASE } from '../../lib/api';
 
-const W = 794;
-const H = 561;
+
 
 interface FullVisualBuilderProps {
   eventId: string;
@@ -151,11 +150,12 @@ export default function FullVisualBuilder({
       return;
     }
 
-    const item = s[dragging];
+    const key = dragging as string;
+    const item = (s as any)[key];
     if (item) {
       patchLayout({
-        [dragging]: { ...item, x: Math.max(0, Math.min(1, item.x + dx)), y: Math.max(0, Math.min(1, item.y + dy)) }
-      });
+        [key]: { ...item, x: Math.max(0, Math.min(1, item.x + dx)), y: Math.max(0, Math.min(1, item.y + dy)) }
+      } as any);
     }
   }, [dragging, resizing, previewData, onLogoPosChange, patchLayout, toLocal]);
 
@@ -177,7 +177,7 @@ export default function FullVisualBuilder({
 
   const startDrag = (key: DragKey, e: React.PointerEvent) => {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation();  // prevent bubbling to canvas wrapper which would clear selection
     setSelectedElement(key);
     const { nx, ny } = toLocal(e.clientX, e.clientY);
     
@@ -237,8 +237,14 @@ export default function FullVisualBuilder({
 
   return (
     <div className="flex h-[800px] border border-gray-200 rounded-2xl overflow-hidden bg-gray-50 shadow-sm">
-      {/* Canvas Area */}
-      <div className="flex-1 relative overflow-auto bg-gray-100 flex items-center justify-center p-8" onClick={() => setSelectedElement(null)}>
+      {/* Canvas Area — click the background (not an element) to deselect */}
+      <div
+        className="flex-1 relative overflow-auto bg-gray-100 flex items-center justify-center p-8"
+        onPointerDown={(e) => {
+          // Only deselect if the click landed directly on this wrapper (not a child element)
+          if (e.target === e.currentTarget) setSelectedElement(null);
+        }}
+      >
         <div
           ref={wrapRef}
           className="relative shadow-2xl transition-all"
@@ -273,8 +279,8 @@ export default function FullVisualBuilder({
               top: `${layout.recipientName.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${layout.recipientName.scale})`,
               width: '85%',
-              color: layout.recipientName.color || '#000000',
-              fontFamily: layout.recipientName.fontFamily || 'inherit',
+              color: (layout.recipientName as any).color || '#000000',
+              fontFamily: (layout.recipientName as any).fontFamily || 'inherit',
             }}
             onPointerDown={e => startDrag('recipientName', e)}
           >
@@ -289,8 +295,8 @@ export default function FullVisualBuilder({
               top: `${layout.bodyBlock.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${layout.bodyBlock.scale})`,
               width: '88%',
-              color: layout.bodyBlock.color || '#4b5563',
-              fontFamily: layout.bodyBlock.fontFamily || 'inherit',
+              color: (layout.bodyBlock as any).color || '#4b5563',
+              fontFamily: (layout.bodyBlock as any).fontFamily || 'inherit',
             }}
             onPointerDown={e => startDrag('bodyBlock', e)}
           >
@@ -333,8 +339,8 @@ export default function FullVisualBuilder({
               top: `${layout.authorityName.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${layout.authorityName.scale})`,
               width: '40%',
-              color: layout.authorityName.color || '#1f2937',
-              fontFamily: layout.authorityName.fontFamily || 'inherit',
+              color: (layout.authorityName as any).color || '#1f2937',
+              fontFamily: (layout.authorityName as any).fontFamily || 'inherit',
             }}
             onPointerDown={e => startDrag('authorityName', e)}
           >
@@ -349,8 +355,8 @@ export default function FullVisualBuilder({
               top: `${layout.designation.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${layout.designation.scale})`,
               width: '40%',
-              color: layout.designation.color || '#6b7280',
-              fontFamily: layout.designation.fontFamily || 'inherit',
+              color: (layout.designation as any).color || '#6b7280',
+              fontFamily: (layout.designation as any).fontFamily || 'inherit',
             }}
             onPointerDown={e => startDrag('designation', e)}
           >

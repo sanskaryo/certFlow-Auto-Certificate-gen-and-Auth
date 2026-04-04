@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import os
 import uuid
@@ -100,20 +99,27 @@ def _compute_verification_hash(
 
 def _get_intelligent_wording(role: str, event_name: str) -> list[str]:
     """Returns lines [line1, line2] based on the participant's role."""
-    r = role.lower()
-    if "winner" in r:
-        return [f"has successfully won {event_name}", f"with the outstanding position of {role.capitalize()}"]
+    r = role.lower().strip()
+    if not r:
+        return [f"has successfully completed", event_name]
+    elif any(w in r for w in ("1st", "first", "winner", "champion", "gold")):
+        return [f"has excelled and secured the position of", f"{role.title()} at {event_name}"]
+    elif any(w in r for w in ("2nd", "second", "runner", "silver")):
+        return [f"has achieved the distinction of", f"{role.title()} at {event_name}"]
+    elif any(w in r for w in ("3rd", "third", "bronze")):
+        return [f"has been awarded the position of", f"{role.title()} at {event_name}"]
     elif "volunteer" in r:
-        return [f"has contributed selflessly as a {role.capitalize()}", f"to the success of {event_name}"]
+        return [f"has served selflessly as a {role.title()}", f"contributing to the success of {event_name}"]
     elif "speaker" in r:
-        return [f"has shared valuable insights as a {role.capitalize()}", f"during the {event_name} event"]
-    elif "organizer" in r:
-        return [f"has demonstrated exceptional leadership as an {role.capitalize()}", f"for {event_name}"]
-    elif "participant" in r or "attendee" in r:
+        return [f"has delivered an insightful presentation as a {role.title()}", f"at {event_name}"]
+    elif "organizer" in r or "coordinator" in r:
+        return [f"has demonstrated exceptional leadership as {role.title()}", f"for {event_name}"]
+    elif "mentor" in r or "judge" in r:
+        return [f"has provided invaluable guidance as {role.title()}", f"at {event_name}"]
+    elif any(w in r for w in ("participant", "attendee", "delegate")):
         return [f"has actively participated in", event_name]
     else:
-        # Default fallback
-        return [f"has successfully completed {event_name}", f"Role: {role}" if role else ""]
+        return [f"has successfully completed {event_name}", f"in the capacity of {role.title()}"]
 
 
 def generate_qr_code(data: str, filename: str) -> str:
@@ -389,36 +395,33 @@ def _generate_standalone_pdf(
 
     line_gap = 40 * bb_scale
     y_ptr = y0 - line_gap
-    if lines[1] and "Role: " not in lines[1]:
+    if lines[1]:
         c.drawCentredString(bx, y_ptr, lines[1])
         y_ptr -= line_gap
 
+    # Always show the organization name the user filled in
     c.drawCentredString(bx, y_ptr, f"organized by {organization}")
 
-    if lines[1] and "Role: " in lines[1]:
-        y_ptr -= line_gap
-        c.setFont(font_bold, max(10, int(16 * bb_scale)))
-        c.drawCentredString(bx, y_ptr, lines[1])
+    # ── QR code block — fixed bottom-left, no overlap ──────────────────────
+    qr_size = min(0.12 * width, 0.20 * height)   # ~85pt on A4-landscape
+    qr_margin = 28                                 # pts from edges
+    qr_x = qr_margin
+    qr_y = qr_margin + 18                         # room for cert ID below
 
-    c.setFont(font_main, 12)
-    c.drawString(width - 240, 60, f"Issued on: {date_text}")
+    c.drawImage(qr_path, qr_x, qr_y, width=qr_size, height=qr_size)
 
-    qr_l = L["qr"]
-    qr_w = float(qr_l["size"]) * width
-    qr_x = float(qr_l["x"]) * width
-    qr_top = float(qr_l["y"])
-    qr_y_pdf = height * (1.0 - qr_top) - qr_w
-    c.drawImage(qr_path, qr_x, qr_y_pdf, width=qr_w, height=qr_w)
-    c.setFont(font_main, 8)
-    c.drawCentredString(qr_x + qr_w / 2, max(36, qr_y_pdf - 8), "Scan to verify")
-    c.drawString(qr_x, max(28, qr_y_pdf - 22), f"Certificate ID: {cert_id}")
+    c.setFont(font_main, 7)
+    # label above QR
+    c.drawCentredString(qr_x + qr_size / 2, qr_y + qr_size + 4, "Scan to verify")
+    # cert ID below QR
+    cert_id_label = f"ID: {cert_id[:20]}..." if len(cert_id) > 20 else f"ID: {cert_id}"
+    c.drawString(qr_x, qr_margin + 4, cert_id_label)
+
+    # Issued on — bottom-right, separate from signature block
+    c.setFont(font_main, 11)
+    c.drawRightString(width - 28, qr_margin + 4, f"Issued on: {date_text}")
     
-    if template_id == "traditional-elegant":
-        # Draw fake signature lines
-        c.setStrokeColor(style["text"])
-        c.setLineWidth(1)
-        c.line(width - 220, 110, width - 80, 110)
-        c.drawCentredString(width - 150, 95, "Authorized Signature")
+    # (traditional-elegant signature line is now part of the unified sig block below)
 
     # Optional Logo
     if logo_path:
@@ -450,53 +453,60 @@ def _generate_standalone_pdf(
         except Exception as e:
             logger.error(f"Failed to draw logo from {logo_path}: {e}")
 
-    # Signature + Authority — bottom right, larger and clearly readable
+    # Signature + Authority — stacked cleanly: image → line → name → position
     if signature_path:
         if not os.path.exists(signature_path):
             signature_path = os.path.abspath(os.path.join("uploads", os.path.basename(signature_path)))
 
-    has_sig   = signature_path and os.path.exists(signature_path)
-    has_auth  = bool(authority_name or authority_position)
-
-    sig_l = L["signature"]
-    sig_w = float(sig_l["w"]) * width
-    sig_h = float(sig_l["h"]) * height
-    sig_x = float(sig_l["x"]) * width
-    sig_y_top = float(sig_l["y"])
-    sig_img_y = height * (1.0 - sig_y_top) - sig_h
+    has_sig  = bool(signature_path and os.path.exists(signature_path))
+    has_auth = bool(authority_name or authority_position)
 
     if has_sig or has_auth:
+        sig_l  = L["signature"]
+        sig_w  = float(sig_l["w"]) * width
+        sig_h  = float(sig_l["h"]) * height
+        sig_x  = float(sig_l["x"]) * width
+        # Top of signature image in PDF coords (y=0 at bottom)
+        sig_top_pdf = height * (1.0 - float(sig_l["y"]))
+        sig_img_y   = sig_top_pdf - sig_h        # bottom-left corner of image
+
+        # 1. Draw signature image
         if has_sig:
             try:
-                c.drawImage(signature_path, sig_x, sig_img_y, width=sig_w, height=sig_h, preserveAspectRatio=True, mask='auto')
-                logger.info(f"Successfully drew signature from {signature_path}")
+                c.drawImage(
+                    signature_path, sig_x, sig_img_y,
+                    width=sig_w, height=sig_h,
+                    preserveAspectRatio=True, mask="auto",
+                )
+                logger.info(f"Drew signature at ({sig_x:.0f}, {sig_img_y:.0f})")
+                block_bottom = sig_img_y
             except Exception as e:
-                logger.error(f"Failed to draw signature from {signature_path}: {e}")
+                logger.error(f"Failed to draw signature: {e}")
+                block_bottom = sig_top_pdf
+        else:
+            block_bottom = sig_top_pdf
 
-            line_y = sig_img_y - 4
-            c.setStrokeColor(style.get("accent", "#9ca3af"))
-            c.setLineWidth(1)
-            c.line(sig_x, line_y, sig_x + sig_w, line_y)
+        # 2. Divider line just below the signature image (or start of block)
+        line_y = block_bottom - 6
+        c.setStrokeColor(style.get("accent", "#9ca3af"))
+        c.setLineWidth(1)
+        c.line(sig_x, line_y, sig_x + sig_w, line_y)
 
-        an = L["authorityName"]
-        ap = L["designation"]
+        # 3. Authority name then position, centred on the sig block
+        text_cx = sig_x + sig_w / 2
+        text_y  = line_y - 16
+
         c.setFillColor(style.get("text", "#374151"))
         if authority_name:
-            fs = max(8, int(14 * float(an.get("scale", 1.0))))
+            fs = max(9, int(13 * float(L["authorityName"].get("scale", 1.0))))
             c.setFont(font_bold, fs)
-            c.drawCentredString(
-                width * float(an["x"]),
-                _baseline_from_top(float(an["y"]), height, fs),
-                authority_name,
-            )
+            c.drawCentredString(text_cx, text_y, authority_name)
+            text_y -= fs + 4
+
         if authority_position:
-            fs2 = max(8, int(12 * float(ap.get("scale", 1.0))))
+            fs2 = max(8, int(11 * float(L["designation"].get("scale", 1.0))))
             c.setFont(font_main, fs2)
-            c.drawCentredString(
-                width * float(ap["x"]),
-                _baseline_from_top(float(ap["y"]), height, fs2),
-                authority_position,
-            )
+            c.drawCentredString(text_cx, text_y, authority_position)
 
     c.save()
 
@@ -601,18 +611,7 @@ async def generate_single_manual_certificate(
             },
             recipient_email=email,
         )
-        if email:
-            subject = f"Your Certificate for {event_name}"
-            body = f"Hello {participant_name},\n\nCongratulations on receiving your certificate for {event_name}. Please find it attached.\n\nVerify it here: {verify_url}\n\nBest regards,\n{organization}"
-            asyncio.create_task(send_certificate_email(
-                email, subject, body, output_path,
-                participant_name=participant_name,
-                event_name=event_name,
-                organization=organization,
-                date_text=date_text,
-                role=role,
-                verify_url=verify_url,
-            ))
+        # Email is NOT sent here — user must click 'Send Email' explicitly after generation
     finally:
         if os.path.exists(qr_path):
             os.remove(qr_path)
@@ -682,20 +681,7 @@ async def process_certificate_generation(event_id: str):
                 {"_id": participant["_id"]},
                 {"$set": {"status": "generated", "certificate_id": cert_id}},
             )
-
-            if part_email:
-                subject = f"Your Certificate for {event['name']}"
-                org = str(event.get("organization", event.get("organization_id", "")))
-                body = f"Hello {participant['name']},\n\nCongratulations! Your certificate for {event['name']} is attached.\n\nVerify: {verify_url}\n\nBest,\n{org}"
-                asyncio.create_task(send_certificate_email(
-                    part_email, subject, body, output_path,
-                    participant_name=participant["name"],
-                    event_name=event["name"],
-                    organization=org,
-                    date_text=event_date_text,
-                    role=role,
-                    verify_url=verify_url,
-                ))
+            # Email is NOT sent here — user must click 'Send Email' explicitly
             done += 1
         except Exception as exc:
             logger.error(f"Failed cert for {participant.get('name')}: {exc}")
