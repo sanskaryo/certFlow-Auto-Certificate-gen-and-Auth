@@ -429,9 +429,17 @@ def _generate_standalone_pdf(
     if logo_path and os.path.exists(logo_path):
         try:
             pos = logo_position or {}
-            size_frac = float(pos.get("size", 0.18))   # fraction of cert width
+            size_frac = float(pos.get("size", 0.25))   # fraction of cert width
             logo_w = width * size_frac
-            logo_h = logo_w                              # square bounding box, preserveAspectRatio handles the rest
+            
+            try:
+                from reportlab.lib.utils import ImageReader
+                ir = ImageReader(logo_path)
+                act_w, act_h = ir.getSize()
+                logo_h = logo_w * (act_h / act_w)
+            except Exception:
+                logo_h = logo_w
+
             # x/y are fractions (0-1). x=0 → left edge, y=1 → top edge (PDF coords: y=0 is bottom)
             x_frac = float(pos.get("x", 0.03))
             y_frac = float(pos.get("y", 0.82))

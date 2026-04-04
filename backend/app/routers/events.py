@@ -293,7 +293,7 @@ async def update_authority(event_id: str, payload: EventAuthorityUpdate, current
 class LogoPositionUpdate(BaseModel):
     x: float = Field(..., ge=0, le=1, description="X position as fraction of certificate width (0=left, 1=right)")
     y: float = Field(..., ge=0, le=1, description="Y position as fraction of certificate height (0=bottom, 1=top)")
-    size: float = Field(default=0.25, ge=0.05, le=0.5, description="Logo size as fraction of certificate width")
+    size: float = Field(default=0.25, ge=0.05, le=0.8, description="Logo size as fraction of certificate width")
 
 
 @router.patch("/{event_id}/logo-position")

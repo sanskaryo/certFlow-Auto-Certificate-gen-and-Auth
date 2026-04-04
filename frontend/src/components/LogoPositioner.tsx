@@ -16,10 +16,10 @@ interface Props {
 }
 
 const PRESETS: { label: string; pos: LogoPos }[] = [
-  { label: 'Top Left',    pos: { x: 0.03, y: 0.82, size: 0.18 } },
-  { label: 'Top Center',  pos: { x: 0.41, y: 0.82, size: 0.18 } },
-  { label: 'Top Right',   pos: { x: 0.76, y: 0.82, size: 0.18 } },
-  { label: 'Bottom Left', pos: { x: 0.03, y: 0.22, size: 0.18 } },
+  { label: 'Top Left',    pos: { x: 0.03, y: 0.82, size: 0.25 } },
+  { label: 'Top Center',  pos: { x: 0.38, y: 0.82, size: 0.25 } },
+  { label: 'Top Right',   pos: { x: 0.72, y: 0.82, size: 0.25 } },
+  { label: 'Bottom Left', pos: { x: 0.03, y: 0.22, size: 0.25 } },
 ];
 
 export default function LogoPositioner({ logoUrl, initial, onChange, onSave, templateColor = '#e8f1ff' }: Props) {
@@ -38,20 +38,19 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
     return { w: el.clientWidth, h: el.clientHeight };
   }, []);
 
-  // Convert fraction pos → pixel pos of logo top-left corner on canvas
   const toPixels = (p: LogoPos, w: number, h: number) => {
     const logoW = w * p.size;
     const logoH = logoW;
     // x is left edge fraction, y is top edge fraction (0=top in screen coords)
     const px = p.x * w;
-    const py = (1 - p.y) * h - logoH; // flip: y=1 means top of cert
+    const py = (1 - p.y) * h; // PDF y=1 means top, so 1-y is fraction from top
     return { px, py, logoW, logoH };
   };
 
-  const toFraction = (px: number, py: number, logoW: number, w: number, h: number): Pick<LogoPos, 'x' | 'y'> => {
+  const toFraction = (px: number, py: number, w: number, h: number): Pick<LogoPos, 'x' | 'y'> => {
     const x = Math.max(0, Math.min(1 - pos.size, px / w));
     // py is top-left in screen coords; convert back to fraction where y=1 is top
-    const y = Math.max(0, Math.min(1, 1 - (py + logoW) / h));
+    const y = Math.max(0, Math.min(1, 1 - py / h));
     return { x, y };
   };
 
@@ -71,7 +70,7 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
     const dy = e.clientY - dragStart.current.my;
     const newPx = dragStart.current.ox + dx;
     const newPy = dragStart.current.oy + dy;
-    const { x, y } = toFraction(newPx, newPy, logoW, w, h);
+    const { x, y } = toFraction(newPx, newPy, w, h);
     const next = { ...pos, x, y };
     setPos(next);
     onChange(next);
@@ -109,7 +108,7 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
     const dy = t.clientY - dragStart.current.my;
     const newPx = dragStart.current.ox + dx;
     const newPy = dragStart.current.oy + dy;
-    const { x, y } = toFraction(newPx, newPy, logoW, w, h);
+    const { x, y } = toFraction(newPx, newPy, w, h);
     const next = { ...pos, x, y };
     setPos(next);
     onChange(next);
@@ -238,7 +237,7 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
         <label className="text-xs font-semibold text-gray-500 whitespace-nowrap">Logo Size</label>
         <input
           type="range"
-          min={5} max={40} step={1}
+          min={5} max={60} step={1}
           value={Math.round(pos.size * 100)}
           onChange={e => {
             const next = { ...pos, size: parseInt(e.target.value) / 100 };

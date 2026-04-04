@@ -89,6 +89,7 @@ export default function SingleForm({ single, errors, eventName, onChange }: Sing
               type="date"
               value={single.date_text}
               onChange={e => onChange('date_text', e.target.value)}
+              onClick={e => (e.target as HTMLInputElement).showPicker()}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-prime-400"
             />
             <InlineValidator error={errors.date_text ?? null} />

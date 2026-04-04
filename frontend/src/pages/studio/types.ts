@@ -173,7 +173,7 @@ export const initialState: StudioState = {
     aiPrompt: '',
     logoFile: null,
     logoPreviewUrl: null,
-    logoPos: { x: 0.03, y: 0.82, size: 0.18 },
+    logoPos: { x: 0.03, y: 0.82, size: 0.25 },
   },
   authority: {
     name: '',

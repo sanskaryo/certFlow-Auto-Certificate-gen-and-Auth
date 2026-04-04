@@ -200,6 +200,7 @@ function EventList() {
                             required
                             value={date}
                             onChange={e => setDate(e.target.value)}
+                            onClick={e => (e.target as HTMLInputElement).showPicker()}
                             disabled={isCreating}
                             className="w-full px-5 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 outline-none transition-all duration-200"
                         />

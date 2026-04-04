@@ -32,8 +32,10 @@ app.include_router(events.router)
 app.include_router(profiles.router)
 app.include_router(verification.router)
 app.include_router(settings_router.router)
-app.include_router(analytics.router)
+from app.routers import analytics, admin
 
+app.include_router(analytics.router)
+app.include_router(admin.router)
 # Mount uploads directory for previewing AI backgrounds
 uploads_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)

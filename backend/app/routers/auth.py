@@ -94,3 +94,66 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Any:
 
     access_token = create_access_token(data={"sub": user_dict["email"]})
     return {"access_token": access_token, "token_type": "bearer"}
+
+from pydantic import BaseModel
+import secrets
+import datetime
+from bson import ObjectId
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.post("/change-password")
+async def change_password(req: ChangePasswordRequest, current_user: Any = Depends(get_current_user)):
+    db = get_database()
+    if not verify_password(req.current_password, current_user["hashed_password"]):
+        raise HTTPException(status_code=400, detail="Current password incorrect")
+    
+    hashed = get_password_hash(req.new_password)
+    await db.users.update_one({"_id": current_user["_id"]}, {"$set": {"hashed_password": hashed}})
+    return {"message": "Password updated successfully"}
+
+class ApiKeyCreate(BaseModel):
+    name: str
+
+@router.post("/api-keys")
+async def create_api_key(req: ApiKeyCreate, current_user: Any = Depends(get_current_user)):
+    db = get_database()
+    raw_key = "sk-" + secrets.token_hex(24)
+    key_doc = {
+        "user_id": str(current_user["_id"]),
+        "name": req.name,
+        "key": raw_key, # we store raw for simplicity, ideally hashed but user needs it masked
+        "created_at": datetime.datetime.utcnow(),
+        "last_used_at": None
+    }
+    res = await db.api_keys.insert_one(key_doc)
+    return {"id": str(res.inserted_id), "name": req.name, "key": raw_key, "created_at": key_doc["created_at"]}
+
+@router.get("/api-keys")
+async def get_api_keys(current_user: Any = Depends(get_current_user)):
+    db = get_database()
+    keys = await db.api_keys.find({"user_id": str(current_user["_id"])}).to_list(length=None)
+    result = []
+    for k in keys:
+        raw = k.get("key", "")
+        masked = f"sk-••••••••{raw[-4:]}" if len(raw) > 4 else "sk-••••••••"
+        result.append({
+            "id": str(k["_id"]),
+            "name": k.get("name"),
+            "key_masked": masked,
+            "created_at": k.get("created_at"),
+            "last_used_at": k.get("last_used_at")
+        })
+    return result
+
+@router.delete("/api-keys/{key_id}")
+async def delete_api_key(key_id: str, current_user: Any = Depends(get_current_user)):
+    db = get_database()
+    if not ObjectId.is_valid(key_id):
+        raise HTTPException(status_code=400, detail="Invalid API key ID")
+    res = await db.api_keys.delete_one({"_id": ObjectId(key_id), "user_id": str(current_user["_id"])})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"message": "API key revoked"}

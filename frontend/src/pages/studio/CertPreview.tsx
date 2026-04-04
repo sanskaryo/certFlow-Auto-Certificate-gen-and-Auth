@@ -34,6 +34,10 @@ type DragSnap = {
   bodyBlock?: { x: number; y: number; scale: number };
 };
 
+const Placeholder = ({ className = "" }: { className?: string }) => (
+  <div className={`bg-[#e0e0e0] rounded-[4px] w-full h-full ${className}`} />
+);
+
 export default function CertPreview({
   data,
   scale = 1,
@@ -57,6 +61,7 @@ export default function CertPreview({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<DragKey | null>(null);
+  const [resizing, setResizing] = useState<DragKey | null>(null);
   const dragSnap = useRef<DragSnap | null>(null);
 
   const layoutRef = useRef(layout);
@@ -76,11 +81,42 @@ export default function CertPreview({
 
   const onPointerMove = useCallback(
     (e: PointerEvent) => {
-      if (!dragging || !dragSnap.current || !interactive) return;
+      if ((!dragging && !resizing) || !dragSnap.current || !interactive) return;
       const { nx, ny } = toLocal(e.clientX, e.clientY);
       const s = dragSnap.current;
       const dx = nx - s.nx0;
       const dy = ny - s.ny0;
+
+      if (resizing) {
+        const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        if (resizing === 'logo' && s.logo) {
+            onLogoPosChange?.({
+                ...s.logo,
+                size: Math.max(0.05, Math.min(0.5, s.logo.size + delta))
+            });
+        } else if (resizing === 'signature' && s.signature) {
+            onLayoutPatch?.({
+                signature: {
+                    ...s.signature,
+                    w: Math.max(0.1, Math.min(0.6, s.signature.w + dx)),
+                    h: Math.max(0.05, Math.min(0.4, s.signature.h + dy))
+                }
+            });
+        } else if (resizing === 'qr' && s.qr) {
+            onLayoutPatch?.({
+                qr: { ...s.qr, size: Math.max(0.05, Math.min(0.3, s.qr.size + delta)) }
+            });
+        } else {
+            // Text elements
+            const item = (s as any)[resizing];
+            if (item) {
+                onLayoutPatch?.({
+                    [resizing]: { ...item, scale: Math.max(0.4, Math.min(3, item.scale + delta * 2)) }
+                });
+            }
+        }
+        return;
+      }
 
       if (dragging === 'logo' && s.logo) {
         const lp = s.logo;
@@ -142,23 +178,24 @@ export default function CertPreview({
         });
       }
     },
-    [dragging, interactive, onLayoutPatch, onLogoPosChange, toLocal]
+    [dragging, resizing, interactive, onLayoutPatch, onLogoPosChange, toLocal]
   );
 
   const onPointerUp = useCallback(() => {
     setDragging(null);
+    setResizing(null);
     dragSnap.current = null;
   }, []);
 
   useEffect(() => {
-    if (!dragging) return;
+    if (!dragging && !resizing) return;
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
     return () => {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [dragging, onPointerMove, onPointerUp]);
+  }, [dragging, resizing, onPointerMove, onPointerUp]);
 
   const startDrag = (key: DragKey, e: React.PointerEvent) => {
     if (!interactive) return;
@@ -168,59 +205,107 @@ export default function CertPreview({
     const L = layoutRef.current;
     const lp = logoPosRef.current;
 
-    if (key === 'logo') {
-      dragSnap.current = { nx0: nx, ny0: ny, logo: { ...lp } };
-    } else if (key === 'signature') {
-      dragSnap.current = { nx0: nx, ny0: ny, signature: { ...L.signature } };
-    } else if (key === 'qr') {
-      dragSnap.current = { nx0: nx, ny0: ny, qr: { ...L.qr } };
-    } else if (key === 'authorityName') {
-      dragSnap.current = { nx0: nx, ny0: ny, authorityName: { ...L.authorityName } };
-    } else if (key === 'designation') {
-      dragSnap.current = { nx0: nx, ny0: ny, designation: { ...L.designation } };
-    } else if (key === 'recipientName') {
-      dragSnap.current = { nx0: nx, ny0: ny, recipientName: { ...L.recipientName } };
-    } else if (key === 'bodyBlock') {
-      dragSnap.current = { nx0: nx, ny0: ny, bodyBlock: { ...L.bodyBlock } };
-    }
+    const snapMap: any = {
+      logo: { logo: { ...lp } },
+      signature: { signature: { ...L.signature } },
+      qr: { qr: { ...L.qr } },
+      authorityName: { authorityName: { ...L.authorityName } },
+      designation: { designation: { ...L.designation } },
+      recipientName: { recipientName: { ...L.recipientName } },
+      bodyBlock: { bodyBlock: { ...L.bodyBlock } }
+    };
+    dragSnap.current = { nx0: nx, ny0: ny, ...snapMap[key] };
     setDragging(key);
   };
+
+  const startResize = (key: DragKey, e: React.PointerEvent) => {
+    if (!interactive) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { nx, ny } = toLocal(e.clientX, e.clientY);
+    const L = layoutRef.current;
+    const lp = logoPosRef.current;
+
+    const snapMap: any = {
+      logo: { logo: { ...lp } },
+      signature: { signature: { ...L.signature } },
+      qr: { qr: { ...L.qr } },
+      authorityName: { authorityName: { ...L.authorityName } },
+      designation: { designation: { ...L.designation } },
+      recipientName: { recipientName: { ...L.recipientName } },
+      bodyBlock: { bodyBlock: { ...L.bodyBlock } }
+    };
+    dragSnap.current = { nx0: nx, ny0: ny, ...snapMap[key] };
+    setResizing(key);
+  };
+
+  const ResizeHandle = ({ onStart }: { onStart: (e: React.PointerEvent) => void }) => (
+    <div 
+      className="absolute bottom-0 right-0 w-3 h-3 bg-prime-600 rounded-full border border-white shadow-md cursor-nwse-resize z-20 -mr-1.5 -mb-1.5"
+      onPointerDown={onStart}
+    />
+  );
 
   const logoTopPct = (1 - logoPos.y) * 100;
   const ring = interactive ? 'ring-2 ring-prime-500 ring-offset-1 rounded z-10' : '';
 
+  const [currentScale, setCurrentScale] = useState(scale);
+
+  useEffect(() => {
+    if (!wrapRef.current || !wrapRef.current.parentElement) return;
+    const parent = wrapRef.current.parentElement;
+
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        if (width > 0) {
+          setCurrentScale(width / W);
+        }
+      }
+    });
+
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div
-      ref={wrapRef}
-      className="relative overflow-hidden"
-      style={{
-        width: W,
-        height: H,
-        transform: `scale(${scale})`,
-        transformOrigin: 'top left',
-        background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 60%, #f0fdfa 100%)',
-        border: '1px solid #e2e8f0',
-        borderRadius: 8,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-        fontFamily: 'inherit',
-      }}
-    >
-      <div className="absolute inset-3 border border-prime-200 rounded pointer-events-none" />
+    <div style={{ width: '100%', minWidth: 280, height: H * currentScale, overflow: 'hidden' }}>
+        <div
+          ref={wrapRef}
+          className="relative overflow-hidden"
+          style={{
+            width: W,
+            height: H,
+            transform: `scale(${currentScale})`,
+            transformOrigin: 'top left',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 60%, #f0fdfa 100%)',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+            fontFamily: 'inherit',
+          }}
+        >
+          <div className="absolute inset-3 border border-prime-200 rounded pointer-events-none" />
       <div className="absolute inset-4 border border-prime-100 rounded pointer-events-none" />
 
-      {logoUrl && (
-        <div
-          className={`absolute ${interactive ? 'cursor-grab active:cursor-grabbing' : ''} ${ring}`}
-          style={{
-            left: `${logoPos.x * 100}%`,
-            top: `${logoTopPct}%`,
-            width: `${logoPos.size * 100}%`,
-          }}
-          onPointerDown={e => startDrag('logo', e)}
-        >
-          <img src={logoUrl} alt="Logo" className="w-full object-contain pointer-events-none" draggable={false} />
-        </div>
-      )}
+      <div
+        className={`absolute ${interactive ? 'cursor-grab active:cursor-grabbing' : ''} ${ring}`}
+        style={{
+          left: `${logoPos.x * 100}%`,
+          top: `${logoTopPct}%`,
+          width: `${logoPos.size * 100}%`,
+          height: `${logoPos.size * W}px`,
+          minHeight: '40px'
+        }}
+        onPointerDown={e => startDrag('logo', e)}
+      >
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logo" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+        ) : (
+          <Placeholder />
+        )}
+        {interactive && <ResizeHandle onStart={e => startResize('logo', e)} />}
+      </div>
 
       <p
         className="absolute left-1/2 -translate-x-1/2 font-cert text-3xl font-bold text-studio-heading tracking-wide text-center pointer-events-none"
@@ -238,16 +323,24 @@ export default function CertPreview({
       </p>
 
       <div
-        className={`absolute text-center ${interactive ? 'cursor-grab active:cursor-grabbing' : ''} ${ring}`}
+        className={`absolute text-center flex items-center justify-center ${interactive ? 'cursor-grab active:cursor-grabbing' : ''} ${ring}`}
         style={{
           left: `${layout.recipientName.x * 100}%`,
           top: `${layout.recipientName.y * 100}%`,
           transform: `translate(-50%, -50%) scale(${layout.recipientName.scale})`,
           width: '85%',
+          minHeight: '40px'
         }}
         onPointerDown={e => startDrag('recipientName', e)}
       >
-        <p className="font-cert text-4xl font-bold text-prime-600 leading-tight">{name || 'Recipient Name'}</p>
+        {name ? (
+          <p className="font-cert text-4xl font-bold text-prime-600 leading-tight">{name}</p>
+        ) : (
+          <div className="w-3/5 h-8">
+            <Placeholder />
+          </div>
+        )}
+        {interactive && <ResizeHandle onStart={e => startResize('recipientName', e)} />}
       </div>
 
       <div
@@ -269,6 +362,7 @@ export default function CertPreview({
         <p className="text-xs text-studio-muted mt-1">
           {organization || 'Organization'} &nbsp;·&nbsp; {date || 'Date'}
         </p>
+        {interactive && <ResizeHandle onStart={e => startResize('bodyBlock', e)} />}
       </div>
 
       <div
@@ -284,10 +378,9 @@ export default function CertPreview({
         {signatureUrl ? (
           <img src={signatureUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
         ) : (
-          <div className="w-full h-full border-b-2 border-dashed border-studio-muted flex items-end justify-center pb-1 text-[10px] text-gray-400">
-            Signature
-          </div>
+          <Placeholder />
         )}
+        {interactive && <ResizeHandle onStart={e => startResize('signature', e)} />}
       </div>
 
       <div
@@ -297,10 +390,12 @@ export default function CertPreview({
           top: `${layout.authorityName.y * 100}%`,
           transform: `translate(-50%, -50%) scale(${layout.authorityName.scale})`,
           width: '40%',
+          minHeight: '20px'
         }}
         onPointerDown={e => startDrag('authorityName', e)}
       >
         <p className="text-xs font-semibold text-studio-heading">{authorityName || 'Authority Name'}</p>
+        {interactive && <ResizeHandle onStart={e => startResize('authorityName', e)} />}
       </div>
 
       <div
@@ -310,10 +405,12 @@ export default function CertPreview({
           top: `${layout.designation.y * 100}%`,
           transform: `translate(-50%, -50%) scale(${layout.designation.scale})`,
           width: '40%',
+          minHeight: '20px'
         }}
         onPointerDown={e => startDrag('designation', e)}
       >
         <p className="text-xs text-studio-muted">{authorityPosition || 'Position'}</p>
+        {interactive && <ResizeHandle onStart={e => startResize('designation', e)} />}
       </div>
 
       <div
@@ -325,12 +422,14 @@ export default function CertPreview({
         }}
         onPointerDown={e => startDrag('qr', e)}
       >
-        <div className="w-full aspect-square bg-studio-border rounded flex items-center justify-center">
+        <div className="w-full aspect-square bg-studio-border rounded flex items-center justify-center relative">
           <svg className="w-[60%] h-[60%] text-studio-muted" viewBox="0 0 24 24" fill="currentColor">
             <path d="M3 3h7v7H3V3zm2 2v3h3V5H5zm9-2h7v7h-7V3zm2 2v3h3V5h-3zM3 14h7v7H3v-7zm2 2v3h3v-3H5zm9 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2zm-2-2h2v2h-2v-2z" />
           </svg>
+          {interactive && <ResizeHandle onStart={e => startResize('qr', e)} />}
         </div>
         <p className="text-[9px] text-studio-muted text-center leading-tight">Cert ID: —</p>
+      </div>
       </div>
     </div>
   );

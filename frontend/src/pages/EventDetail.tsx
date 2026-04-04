@@ -13,6 +13,7 @@ import AuthorityStep from './studio/AuthorityStep';
 import ConfirmationStep from './studio/ConfirmationStep';
 import SuccessState from './studio/SuccessState';
 import CertificateLayoutEditor from './studio/CertificateLayoutEditor';
+import FullVisualBuilder from './studio/FullVisualBuilder';
 import { API_BASE } from '../lib/api';
 
 const API = API_BASE;
@@ -35,6 +36,7 @@ export default function EventDetail() {
   const [eventStats, setEventStats] = useState<any>(null);
   const [progress, setProgress] = useState<{ total: number; success: number; failed: number } | null>(null);
   const [debouncedPreview, setDebouncedPreview] = useState<PreviewData | null>(null);
+  const [appMode, setAppMode] = useState<'wizard' | 'visual_builder'>('wizard');
 
   const authHeaders = useMemo<Record<string, string>>(
     () => (token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>)),
@@ -81,7 +83,7 @@ export default function EventDetail() {
           dispatch({ type: 'UPDATE_AUTHORITY', patch: { name: evtData.authority_name || '', position: evtData.authority_position || '' } });
 
           // Pre-fill branding
-          const logoPos = evtData.logo_position || { x: 0.03, y: 0.82, size: 0.18 };
+          const logoPos = evtData.logo_position || { x: 0.03, y: 0.82, size: 0.25 };
           const templateId = evtData.template_id || 'classic-blue';
           dispatch({ type: 'UPDATE_BRANDING', patch: { templateId, logoPos, aiPrompt: evtData.description || '' } });
           dispatch({
@@ -141,11 +143,7 @@ export default function EventDetail() {
     };
   }, [state, eventData]);
 
-  // ── Debounce preview 300ms ────────────────────────────────────────────────
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedPreview(previewData), 300);
-    return () => clearTimeout(timer);
-  }, [previewData]);
+  // (Debounce removed, using raw previewData for immediate feedback during interactions)
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const goToStep = useCallback((n: number) => {
@@ -387,118 +385,158 @@ export default function EventDetail() {
   const toastBg = toast?.type === 'success' ? 'bg-emerald-600' : toast?.type === 'error' ? 'bg-red-600' : 'bg-gray-800';
 
   return (
-    <div className="min-h-screen space-y-6 animate-fadeIn">
-      {/* Header */}
+    <div className="min-h-screen space-y-8 animate-fadeIn pb-20">
+      {/* 1a. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm text-prime-600 font-semibold hover:text-prime-700 transition mb-2"
+            className="inline-flex items-center gap-1.5 text-sm text-[#0d9488] font-bold hover:underline mb-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" />
             </svg>
-            Back to Dashboard
+            Dashboard
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Certificate Studio</h1>
-          {eventData && <p className="text-gray-500 mt-1 text-sm">📅 {eventData.name}</p>}
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Certificate Studio</h1>
+            <div className="px-3 py-1 bg-gray-100 rounded-full text-[10px] font-bold text-gray-400 uppercase tracking-widest border border-gray-200">Editor</div>
+          </div>
+          {eventData && <p className="text-gray-500 mt-1 text-sm font-medium">Event: <span className="text-gray-900">{eventData.name}</span></p>}
         </div>
         <button
           onClick={downloadZip}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-prime-600 to-accent-600 hover:from-prime-700 hover:to-accent-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-prime-500/20 transition-all active:scale-95"
+          className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-xl font-bold shadow-xl hover:bg-gray-800 transition-all active:scale-95 text-sm"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-          Download ZIP
+          Export ZIP
         </button>
       </div>
 
+      {/* 1b. Analytics Bar */}
       {eventStats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-gray-500 text-xs font-semibold mb-1">Issued</p>
-                <p className="text-2xl font-bold text-prime-600">{eventStats.issued || 0}</p>
-            </div>
-            <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-gray-500 text-xs font-semibold mb-1">Opened</p>
-                <p className="text-2xl font-bold text-teal-600">{eventStats.opened || 0}</p>
-            </div>
-            <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-gray-500 text-xs font-semibold mb-1">Shared</p>
-                <p className="text-2xl font-bold text-blue-600">{eventStats.shared || 0}</p>
-            </div>
-            <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-gray-500 text-xs font-semibold mb-1">Verified</p>
-                <p className="text-2xl font-bold text-purple-600">{eventStats.verified || 0}</p>
-            </div>
-            <div className="bg-white/70 backdrop-blur-sm p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-gray-500 text-xs font-semibold mb-1">Emailed</p>
-                <p className="text-2xl font-bold text-indigo-600">{eventStats.emailed || 0}</p>
-            </div>
+            {[
+              { label: 'Issued', val: eventStats.issued },
+              { label: 'Opened', val: eventStats.opened },
+              { label: 'Shared', val: eventStats.shared },
+              { label: 'Verified', val: eventStats.verified },
+              { label: 'Emailed', val: eventStats.emailed },
+            ].map(s => (
+              <div key={s.label} className="bg-gray-50/50 p-[12px_20px] rounded-[8px] border border-gray-100 flex flex-col items-center group hover:bg-white hover:shadow-md transition-all">
+                  <p className="text-gray-400 text-[10px] uppercase font-black mb-1 group-hover:text-gray-500">{s.label}</p>
+                  <p className="text-2xl font-black text-[#0d9488] leading-none">{s.val || 0}</p>
+              </div>
+            ))}
         </div>
       )}
 
-      {id && eventData && state.generationStatus !== 'success' && (
-        <CertificateLayoutEditor
-          eventId={id}
-          previewData={previewData}
-          dispatch={dispatch}
-          authHeaders={authHeaders}
-          onNotify={notify}
-        />
+      {/* 1c. Editor Mode Toggle */}
+      {state.generationStatus !== 'success' && (
+        <div className="flex flex-col gap-3">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Studio Mode</p>
+          <div className="flex bg-gray-50 p-1.5 rounded-2xl border border-gray-100 shadow-inner w-full sm:w-fit">
+            <button
+              onClick={() => setAppMode('wizard')}
+              className={`flex-1 sm:flex-none px-8 py-3 rounded-xl text-sm font-black transition-all ${
+                appMode === 'wizard' 
+                  ? 'bg-[#0d9488] text-white shadow-lg' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Basic Wizard
+            </button>
+            <button
+              onClick={() => setAppMode('visual_builder')}
+              className={`flex-1 sm:flex-none px-8 py-3 rounded-xl text-sm font-black border transition-all ${
+                appMode === 'visual_builder' 
+                  ? 'bg-[#0d9488] text-white shadow-lg border-transparent ml-1.5' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-200 ml-1.5'
+              }`}
+            >
+              Full Visual Editor
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Main two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-6">
-        {/* Left: step indicator + active step */}
-        <div className="space-y-4">
-          {state.generationStatus !== 'success' && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <StepIndicator
-                currentStep={state.step}
-                totalSteps={STEP_LABELS.length}
-                label={STEP_LABELS[state.step] ?? ''}
-                onNavigate={goToStep}
+      <div className="w-full flex flex-col gap-10">
+        {appMode === 'visual_builder' && state.generationStatus !== 'success' ? (
+          <div className="animate-fadeIn flex flex-col gap-10">
+            <FullVisualBuilder
+              eventId={id!}
+              previewData={previewData}
+              dispatch={dispatch}
+              authHeaders={authHeaders}
+              onNotify={notify}
+            />
+            {id && eventData && (
+              <CertificateLayoutEditor
+                eventId={id}
+                previewData={previewData}
+                dispatch={dispatch}
+                authHeaders={authHeaders}
+                onNotify={notify}
               />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={goToPreviousStep}
-                  disabled={state.step === 0}
-                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  Previous
-                </button>
-                {state.step < STEP_LABELS.length - 1 && (
-                  <button
-                    type="button"
-                    onClick={validateAndAdvance}
-                    className="px-3 py-1.5 rounded-lg bg-prime-600 hover:bg-prime-700 text-sm font-semibold text-white transition"
-                  >
-                    Next
-                  </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-10 animate-fadeIn">
+            {/* Main two-column layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10">
+              {/* Left: step indicator + active step */}
+              <div className="space-y-6">
+                {state.generationStatus !== 'success' && (
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
+                    <StepIndicator
+                      currentStep={state.step}
+                      totalSteps={STEP_LABELS.length}
+                      label={STEP_LABELS[state.step] ?? ''}
+                      onNavigate={goToStep}
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={goToPreviousStep}
+                        disabled={state.step === 0}
+                        className="px-4 py-2 rounded-xl border border-gray-200 text-xs font-black text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all uppercase tracking-widest"
+                      >
+                        Prev
+                      </button>
+                      {state.step < STEP_LABELS.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={validateAndAdvance}
+                          className="px-6 py-2 rounded-xl bg-gray-900 border border-gray-900 hover:bg-black text-xs font-black text-white transition-all uppercase tracking-widest shadow-lg shadow-gray-200"
+                        >
+                          Next
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <StepContainer>
+                  {renderActiveStep()}
+                </StepContainer>
+              </div>
+
+              {/* Right: preview panel */}
+              <div className="relative">
+                {previewData && (
+                  <PreviewPanel data={previewData} eventData={eventData} currentStep={state.step} />
                 )}
               </div>
             </div>
-          )}
-          <StepContainer>
-            {renderActiveStep()}
-          </StepContainer>
-        </div>
-
-        {/* Right: preview panel */}
-        <div>
-          {debouncedPreview && (
-            <PreviewPanel data={debouncedPreview} eventData={eventData} />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl text-white text-sm font-semibold shadow-lg transition-all ${toastBg}`}
+          className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl text-white text-sm font-black shadow-2xl animate-slideIn ${toastBg}`}
         >
           {toast.msg}
         </div>

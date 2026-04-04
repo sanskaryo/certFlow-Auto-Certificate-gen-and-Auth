@@ -12,6 +12,12 @@ type Settings = {
   org_name_override: string;
   remove_branding: boolean;
   domain_verified: boolean;
+  smtp_from_name: string;
+  smtp_from_email: string;
+  smtp_host: string;
+  smtp_port: string; // use string for easy input mapping
+  smtp_username: string;
+  smtp_password: string;
 };
 
 function useToken() {
@@ -28,7 +34,22 @@ export default function OrgSettings() {
     org_name_override: '',
     remove_branding: false,
     domain_verified: false,
+    smtp_from_name: '',
+    smtp_from_email: '',
+    smtp_host: '',
+    smtp_port: '',
+    smtp_username: '',
+    smtp_password: '',
   });
+  
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [showNewKey, setShowNewKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [generatedKey, setGeneratedKey] = useState<{name: string, key: string} | null>(null);
+  
+  const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
+  
+  const [deletingMap, setDeletingMap] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -109,6 +130,107 @@ export default function OrgSettings() {
     }
   };
 
+  useEffect(() => {
+    if (token) fetchApiKeys();
+  }, [token]);
+
+  const fetchApiKeys = async () => {
+    try {
+      const res = await fetch(`${API}/auth/api-keys`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setApiKeys(data);
+      }
+    } catch (e) {}
+  };
+
+  const generateApiKey = async () => {
+    if (!newKeyName.trim()) return notify("Name required for API key", false);
+    try {
+      const res = await fetch(`${API}/auth/api-keys`, {
+        method: "POST", headers, body: JSON.stringify({ name: newKeyName.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to generate key");
+      setGeneratedKey({ name: data.name, key: data.key });
+      setNewKeyName('');
+      setShowNewKey(false);
+      fetchApiKeys();
+      notify("API Key generated");
+    } catch (e: any) {
+      notify(e.message, false);
+    }
+  };
+
+  const revokeApiKey = async (id: string) => {
+    if (!confirm("Are you sure you want to revoke this key?")) return;
+    setDeletingMap(p => ({ ...p, [id]: true }));
+    try {
+      const res = await fetch(`${API}/auth/api-keys/${id}`, { method: "DELETE", headers });
+      if (!res.ok) throw new Error("Failed to revoke");
+      fetchApiKeys();
+      notify("API Key revoked");
+    } catch (e: any) {
+      notify(e.message, false);
+    } finally {
+      setDeletingMap(p => ({ ...p, [id]: false }));
+    }
+  };
+
+  const testSmtp = async () => {
+    try {
+      setVerifying(true);
+      const res = await fetch(`${API}/settings/smtp/test`, {
+        method: "POST", headers, body: JSON.stringify({
+          from_name: settings.smtp_from_name,
+          from_email: settings.smtp_from_email,
+          smtp_host: settings.smtp_host,
+          smtp_port: parseInt(settings.smtp_port) || 587,
+          smtp_username: settings.smtp_username,
+          smtp_password: settings.smtp_password
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        notify("Test email sent successully");
+      } else {
+        notify("SMTP Error: " + data.message, false);
+      }
+    } catch (e: any) {
+      notify("SMTP Test failed", false);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const updatePassword = async () => {
+    if (passwords.new !== passwords.confirm) return notify("New passwords do not match", false);
+    if (!passwords.current || !passwords.new) return notify("Fill out password fields", false);
+    try {
+      setSaving(true);
+      const res = await fetch(`${API}/auth/change-password`, {
+        method: "POST", headers, body: JSON.stringify({
+          current_password: passwords.current,
+          new_password: passwords.new
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to update password");
+      notify("Password updated successfully");
+      setPasswords({ current: '', new: '', confirm: '' });
+    } catch (e: any) {
+      notify(e.message, false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    const confirmEmail = prompt("This action cannot be undone. Type your email to confirm account deletion:");
+    if (!confirmEmail) return;
+    notify("Delete account request simulated.", false); // Safely mocked for now since backend delete missing
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="w-8 h-8 border-4 border-prime-500 border-t-transparent rounded-full animate-spin" />
@@ -120,8 +242,16 @@ export default function OrgSettings() {
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <Link to="/dashboard" className="text-sm text-prime-600 hover:underline">← Back to Dashboard</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-2">Organisation Settings</h1>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-1.5 text-sm text-prime-600 font-semibold hover:text-prime-700 transition mb-4"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900">Organisation Settings</h1>
           <p className="text-sm text-gray-500 mt-1">Manage your custom domain and white-label branding.</p>
         </div>
 
@@ -284,6 +414,216 @@ export default function OrgSettings() {
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.remove_branding ? 'bg-prime-600' : 'bg-gray-200'}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${settings.remove_branding ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </section>
+
+        {/* CARD 3 — API Keys */}
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-gray-800 text-lg">API Keys</h2>
+              <p className="text-sm text-gray-500">Use these keys to issue certificates programmatically from your LMS or platform</p>
+            </div>
+            <button
+              onClick={() => setShowNewKey(!showNewKey)}
+              className="px-4 py-2 border border-teal-600 text-teal-600 hover:bg-teal-50 text-sm font-semibold rounded-xl transition"
+            >
+              Generate new key
+            </button>
+          </div>
+
+          {showNewKey && (
+            <div className="flex gap-2 bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <input
+                autoFocus
+                placeholder="Key name (e.g. Teachable integration)"
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={newKeyName}
+                onChange={e => setNewKeyName(e.target.value)}
+              />
+              <button
+                onClick={generateApiKey}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-xl transition"
+              >
+                Create
+              </button>
+            </div>
+          )}
+
+          {generatedKey && (
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl space-y-2">
+              <p className="text-emerald-800 font-semibold text-sm flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Key generated: {generatedKey.name}
+              </p>
+              <div className="flex gap-2">
+                <code className="flex-1 block bg-white border border-emerald-200 rounded-lg px-3 py-2 text-emerald-900 font-mono text-sm break-all">
+                  {generatedKey.key}
+                </code>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(generatedKey.key); notify("Copied to clipboard"); }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+              <p className="text-xs text-emerald-600 font-medium pt-1">Save this key — it won't be shown again.</p>
+            </div>
+          )}
+
+          {apiKeys.length === 0 ? (
+            <div className="text-center py-6 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
+              <p className="text-sm text-gray-500">No API keys yet. Generate one to start issuing certificates from your platform.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-gray-100 rounded-xl">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 uppercase text-[10px] tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Key</th>
+                    <th className="px-4 py-3">Created</th>
+                    <th className="px-4 py-3">Last used</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {apiKeys.map(k => (
+                    <tr key={k.id} className="hover:bg-gray-50/50">
+                      <td className="px-4 py-3 font-medium text-gray-900">{k.name}</td>
+                      <td className="px-4 py-3 font-mono text-gray-500">{k.key_masked}</td>
+                      <td className="px-4 py-3 text-gray-500">{new Date(k.created_at).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-gray-500">{k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => revokeApiKey(k.id)}
+                          disabled={deletingMap[k.id]}
+                          className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition disabled:opacity-50"
+                        >
+                          {deletingMap[k.id] ? 'Revoking...' : 'Revoke'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* CARD 4 — Email / SMTP Configuration */}
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+          <div>
+            <h2 className="font-bold text-gray-800 text-lg">Email sending</h2>
+            <p className="text-sm text-gray-500">Certificates will be sent from this address. Leave blank to use CertFlow's default sender.</p>
+          </div>
+
+          {!settings.smtp_host && (
+             <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm p-3 rounded-lg flex items-start gap-2">
+               <svg className="w-5 h-5 shrink-0 mt-0.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+               <p>Using CertFlow default sender. Recipients will see certificates sent from <strong>no-reply@certflow.app</strong></p>
+             </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">From name</label>
+              <input 
+                placeholder="Acme Academy" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.smtp_from_name || ''} onChange={e => setSettings(s => ({...s, smtp_from_name: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">From email</label>
+              <input 
+                placeholder="certs@acme.com" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.smtp_from_email || ''} onChange={e => setSettings(s => ({...s, smtp_from_email: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">SMTP host</label>
+              <input 
+                placeholder="smtp.gmail.com" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.smtp_host || ''} onChange={e => setSettings(s => ({...s, smtp_host: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">SMTP port</label>
+              <input 
+                type="number" placeholder="587" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.smtp_port || ''} onChange={e => setSettings(s => ({...s, smtp_port: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">SMTP username</label>
+              <input 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.smtp_username || ''} onChange={e => setSettings(s => ({...s, smtp_username: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">SMTP password</label>
+              <input 
+                type="password"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.smtp_password || ''} onChange={e => setSettings(s => ({...s, smtp_password: e.target.value}))}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={() => save({
+                smtp_from_name: settings.smtp_from_name,
+                smtp_from_email: settings.smtp_from_email,
+                smtp_host: settings.smtp_host,
+                smtp_port: settings.smtp_port,
+                smtp_username: settings.smtp_username,
+                smtp_password: settings.smtp_password,
+              })}
+              disabled={saving}
+              className="px-6 py-2.5 bg-prime-600 hover:bg-prime-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+            >
+              Save email settings
+            </button>
+            <button
+              onClick={testSmtp}
+              disabled={verifying || !settings.smtp_host}
+              className="px-4 py-2.5 border border-teal-600 text-teal-600 hover:bg-teal-50 text-sm font-semibold rounded-xl transition disabled:opacity-50"
+            >
+              Send test email
+            </button>
+          </div>
+        </section>
+
+        {/* CARD 5 — Account */}
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
+          <h2 className="font-bold text-gray-800 text-lg">Account</h2>
+          
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700">Change password</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input type="password" placeholder="Current password" value={passwords.current} onChange={e => setPasswords(p => ({...p, current: e.target.value}))} className="rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-prime-500 outline-none" />
+              <input type="password" placeholder="New password" value={passwords.new} onChange={e => setPasswords(p => ({...p, new: e.target.value}))} className="rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-prime-500 outline-none" />
+              <input type="password" placeholder="Confirm password" value={passwords.confirm} onChange={e => setPasswords(p => ({...p, confirm: e.target.value}))} className="rounded-xl border border-gray-200 px-4 py-2 text-sm focus:ring-2 focus:ring-prime-500 outline-none" />
+            </div>
+            <button onClick={updatePassword} disabled={saving} className="px-5 py-2.5 bg-gray-900 border border-transparent hover:bg-black text-white text-sm font-bold rounded-xl transition">
+              Update password
+            </button>
+          </div>
+
+          <div className="pt-6 border-t border-gray-100 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-red-600">Danger zone</h3>
+              <p className="text-xs text-gray-500 mt-1">Once you delete your account, there is no going back. Please be certain.</p>
+            </div>
+            <button onClick={confirmDeleteAccount} className="px-5 py-2.5 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-bold rounded-xl transition">
+              Delete account
             </button>
           </div>
         </section>
