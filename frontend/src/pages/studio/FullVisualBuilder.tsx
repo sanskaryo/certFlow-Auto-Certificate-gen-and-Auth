@@ -97,20 +97,26 @@ export default function FullVisualBuilder({
     const dy = ny - s.ny0;
 
     if (resizing) {
-      const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
-      if (resizing === 'logo') {
-        onLogoPosChange({
-          ...s.logo,
-          size: Math.max(0.05, Math.min(0.5, s.logo.size + delta))
-        });
-      } else if (resizing === 'signature') {
-        patchLayout({
-          signature: {
-            ...s.signature,
-            w: Math.max(0.1, Math.min(0.6, s.signature.w + dx)),
-            h: Math.max(0.05, Math.min(0.4, s.signature.h + dy))
-          }
-        });
+      if (['logo', 'logo2', 'logo3', 'watermark'].includes(resizing)) {
+        const logoKey = resizing as 'logo' | 'logo2' | 'logo3' | 'watermark';
+        const logoState = logoKey === 'logo' ? s.logo : previewData.certificateLayout[logoKey] as LogoPos;
+        if (logoState) {
+          const newVal = { ...logoState, size: Math.max(0.05, Math.min(0.5, logoState.size + delta)) };
+          if (logoKey === 'logo') onLogoPosChange(newVal);
+          else patchLayout({ [logoKey]: newVal });
+        }
+      } else if (['signature', 'signature2'].includes(resizing)) {
+        const sigKey = resizing as 'signature' | 'signature2';
+        const sigState = sigKey === 'signature' ? s.signature : s.signature2;
+        if (sigState) {
+          patchLayout({
+            [sigKey]: {
+              ...sigState,
+              w: Math.max(0.1, Math.min(0.6, sigState.w + dx)),
+              h: Math.max(0.05, Math.min(0.4, sigState.h + dy))
+            }
+          });
+        }
       } else if (resizing === 'qr') {
         patchLayout({
           qr: { ...s.qr, size: Math.max(0.05, Math.min(0.3, s.qr.size + delta)) }
@@ -125,20 +131,29 @@ export default function FullVisualBuilder({
       return;
     }
 
-    if (dragging === 'logo') {
-      onLogoPosChange({
-        ...s.logo,
-        x: Math.max(0, Math.min(1 - s.logo.size, s.logo.x + dx)),
-        y: Math.max(0, Math.min(1, s.logo.y - dy)),
-      });
+    if (['logo', 'logo2', 'logo3', 'watermark'].includes(dragging)) {
+      const logoKey = dragging as 'logo' | 'logo2' | 'logo3' | 'watermark';
+      const logoState = logoKey === 'logo' ? s.logo : previewData.certificateLayout[logoKey] as LogoPos;
+      if (logoState) {
+          const newVal = {
+            ...logoState,
+            x: Math.max(0, Math.min(1 - logoState.size, logoState.x + dx)),
+            y: Math.max(0, Math.min(1, logoState.y - dy)),
+          };
+          if (logoKey === 'logo') onLogoPosChange(newVal);
+          else patchLayout({ [logoKey]: newVal });
+      }
       return;
     }
 
-    if (dragging === 'signature') {
-      const sig = s.signature;
-      patchLayout({
-        signature: { ...sig, x: Math.max(0, Math.min(1 - sig.w, sig.x + dx)), y: Math.max(0, Math.min(1 - sig.h, sig.y + dy)) }
-      });
+    if (['signature', 'signature2'].includes(dragging)) {
+      const sigKey = dragging as 'signature' | 'signature2';
+      const sig = sigKey === 'signature' ? s.signature : s.signature2;
+      if (sig) {
+        patchLayout({
+          [sigKey]: { ...sig, x: Math.max(0, Math.min(1 - sig.w, sig.x + dx)), y: Math.max(0, Math.min(1 - sig.h, sig.y + dy)) }
+        });
+      }
       return;
     }
     
@@ -273,34 +288,40 @@ export default function FullVisualBuilder({
           )}
 
           <div
-            className={`${getElementStyle(selectedElement === 'recipientName')} text-center`}
+            className={`${getElementStyle(selectedElement === 'recipientName')} text-center flex flex-col items-center justify-center`}
             style={{
               left: `${layout.recipientName.x * 100}%`,
               top: `${layout.recipientName.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${layout.recipientName.scale})`,
               width: '85%',
-              color: (layout.recipientName as any).color || '#000000',
-              fontFamily: (layout.recipientName as any).fontFamily || 'inherit',
+              color: (layout.recipientName as any).color || (layout.theme as any)?.titleColor || '#000000',
+              fontFamily: (layout.recipientName as any).fontFamily || (layout.theme as any)?.fontFamily || 'inherit',
+              fontWeight: (layout.recipientName as any).fontWeight || 'bold',
+              letterSpacing: `${(layout.recipientName as any).letterSpacing || 0}px`,
+              textTransform: (layout.recipientName as any).textTransform || 'none',
             }}
             onPointerDown={e => startDrag('recipientName', e)}
           >
-            <p className="font-serif text-4xl font-bold leading-tight">{previewData.name || 'Recipient Name'}</p>
+            <p className="font-serif text-4xl leading-tight" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{previewData.name || 'Recipient Name'}</p>
             {selectedElement === 'recipientName' && <ResizeHandle onStart={e => startResize('recipientName', e)} />}
           </div>
 
           <div
-            className={`${getElementStyle(selectedElement === 'bodyBlock')} text-center`}
+            className={`${getElementStyle(selectedElement === 'bodyBlock')} text-center flex flex-col items-center justify-center`}
             style={{
               left: `${layout.bodyBlock.x * 100}%`,
               top: `${layout.bodyBlock.y * 100}%`,
               transform: `translate(-50%, -50%) scale(${layout.bodyBlock.scale})`,
               width: '88%',
-              color: (layout.bodyBlock as any).color || '#4b5563',
-              fontFamily: (layout.bodyBlock as any).fontFamily || 'inherit',
+              color: (layout.bodyBlock as any).color || (layout.theme as any)?.textColor || '#4b5563',
+              fontFamily: (layout.bodyBlock as any).fontFamily || (layout.theme as any)?.fontFamily || 'inherit',
+              fontWeight: (layout.bodyBlock as any).fontWeight || 'normal',
+              letterSpacing: `${(layout.bodyBlock as any).letterSpacing || 0}px`,
+              textTransform: (layout.bodyBlock as any).textTransform || 'none',
             }}
             onPointerDown={e => startDrag('bodyBlock', e)}
           >
-            <p className="text-sm mb-1">
+            <p className="text-sm mb-1 leading-snug" style={{ fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>
               has been awarded the role of <span className="font-semibold text-gray-900">{previewData.role || 'Role'}</span>
             </p>
             <p className="text-sm mb-1">
@@ -324,45 +345,78 @@ export default function FullVisualBuilder({
           >
             {previewData.signatureUrl ? (
               <img src={previewData.signatureUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
-            ) : (
-              <div className="w-full h-full border-b-2 border-dashed border-gray-400 flex items-end justify-center pb-1 text-[10px] text-gray-400">
-                Signature
-              </div>
-            )}
-            {selectedElement === 'signature' && <ResizeHandle onStart={e => startResize('signature', e)} />}
-          </div>
+          {['signature', 'signature2'].map(k => {
+             const sigKey = k as 'signature' | 'signature2';
+             const sig = layout[sigKey];
+             if (!sig || sig.hidden) return null;
+             const isSecondary = sigKey === 'signature2';
+             const url = isSecondary ? previewData.authority.sigPreviewUrl2 : previewData.signatureUrl;
+             const aName = isSecondary ? previewData.authority.name2 : previewData.authorityName;
+             const aPosUrl = isSecondary ? previewData.authority.position2 : previewData.authorityPosition;
+             const aNameLayout = isSecondary ? layout.authorityName2 : layout.authorityName;
+             const aDesigLayout = isSecondary ? layout.designation2 : layout.designation;
 
-          <div
-            className={`${getElementStyle(selectedElement === 'authorityName')} text-center`}
-            style={{
-              left: `${layout.authorityName.x * 100}%`,
-              top: `${layout.authorityName.y * 100}%`,
-              transform: `translate(-50%, -50%) scale(${layout.authorityName.scale})`,
-              width: '40%',
-              color: (layout.authorityName as any).color || '#1f2937',
-              fontFamily: (layout.authorityName as any).fontFamily || 'inherit',
-            }}
-            onPointerDown={e => startDrag('authorityName', e)}
-          >
-            <p className="text-sm font-bold">{previewData.authorityName || 'Authority Name'}</p>
-            {selectedElement === 'authorityName' && <ResizeHandle onStart={e => startResize('authorityName', e)} />}
-          </div>
+             return (
+                <div key={sigKey}>
+                   {url && (
+                    <div
+                      className={getElementStyle(selectedElement === sigKey)}
+                      style={{
+                        left: `${sig.x * 100}%`,
+                        top: `${(1 - sig.y) * 100}%`,
+                        width: `${sig.w * 100}%`,
+                        height: `${sig.h * 100}%`,
+                        transform: 'translateY(-100%)',
+                      }}
+                      onPointerDown={e => startDrag(sigKey, e)}
+                    >
+                      <img src={url} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
+                      {selectedElement === sigKey && <ResizeHandle onStart={e => startResize(sigKey, e)} />}
+                    </div>
+                  )}
 
-          <div
-            className={`${getElementStyle(selectedElement === 'designation')} text-center`}
-            style={{
-              left: `${layout.designation.x * 100}%`,
-              top: `${layout.designation.y * 100}%`,
-              transform: `translate(-50%, -50%) scale(${layout.designation.scale})`,
-              width: '40%',
-              color: (layout.designation as any).color || '#6b7280',
-              fontFamily: (layout.designation as any).fontFamily || 'inherit',
-            }}
-            onPointerDown={e => startDrag('designation', e)}
-          >
-            <p className="text-xs">{previewData.authorityPosition || 'Position'}</p>
-            {selectedElement === 'designation' && <ResizeHandle onStart={e => startResize('designation', e)} />}
-          </div>
+                  {aName && aNameLayout && (
+                    <div
+                      className={`${getElementStyle(selectedElement === (isSecondary ? 'authorityName2' : 'authorityName'))} text-center flex flex-col items-center justify-center`}
+                      style={{
+                        left: `${aNameLayout.x * 100}%`,
+                        top: `${aNameLayout.y * 100}%`,
+                        transform: `translate(-50%, -50%) scale(${aNameLayout.scale})`,
+                        width: '30%',
+                        color: aNameLayout.color || layout.theme?.textColor || '#4b5563',
+                        fontFamily: aNameLayout.fontFamily || 'inherit',
+                        fontWeight: aNameLayout.fontWeight || 'bold',
+                        letterSpacing: `${aNameLayout.letterSpacing || 0}px`,
+                        textTransform: aNameLayout.textTransform || 'none',
+                      }}
+                      onPointerDown={e => startDrag(isSecondary ? 'authorityName2' : 'authorityName', e)}
+                    >
+                      <p className="text-sm" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aName}</p>
+                    </div>
+                  )}
+
+                  {aPosUrl && aDesigLayout && (
+                    <div
+                      className={`${getElementStyle(selectedElement === (isSecondary ? 'designation2' : 'designation'))} text-center flex flex-col items-center justify-center`}
+                      style={{
+                        left: `${aDesigLayout.x * 100}%`,
+                        top: `${aDesigLayout.y * 100}%`,
+                        transform: `translate(-50%, -50%) scale(${aDesigLayout.scale})`,
+                        width: '30%',
+                        color: aDesigLayout.color || layout.theme?.textColor || '#6b7280',
+                        fontFamily: aDesigLayout.fontFamily || 'inherit',
+                        fontWeight: aDesigLayout.fontWeight || 'normal',
+                        letterSpacing: `${aDesigLayout.letterSpacing || 0}px`,
+                        textTransform: aDesigLayout.textTransform || 'none',
+                      }}
+                      onPointerDown={e => startDrag(isSecondary ? 'designation2' : 'designation', e)}
+                    >
+                      <p className="text-xs tracking-wide" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aPosUrl}</p>
+                    </div>
+                  )}
+                </div>
+             );
+          })}
 
           <div
             className={`${getElementStyle(selectedElement === 'qr')} flex flex-col items-center gap-1`}
@@ -381,16 +435,14 @@ export default function FullVisualBuilder({
           </div>
 
         </div>
-      </div>
-
-      {/* Right Sidebar - Properties Panel */}
-      <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">
-         <div className="p-5 border-b border-gray-100 bg-gray-50 flex flex-col gap-2">
+        
+     <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">
+        <div className="p-5 border-b border-gray-100 bg-gray-50 flex flex-col gap-2 relative">
             <h2 className="text-lg font-bold text-gray-800">Visual Builder</h2>
-            <p className="text-sm text-gray-500">Select an element on the canvas to resize or style it.</p>
-         </div>
+            <p className="text-sm text-gray-500">{selectedElement ? 'Element Settings' : 'Global Settings'}</p>
+        </div>
 
-         {selectedElement ? (
+        {selectedElement ? (
             <div className="p-5 space-y-6">
                 <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold tracking-wide text-blue-600 uppercase">
@@ -400,51 +452,104 @@ export default function FullVisualBuilder({
                 </div>
 
                 <div className="space-y-4">
-                    {/* Scale Option for non-logo/non-sig/non-qr */}
-                    {['recipientName', 'bodyBlock', 'authorityName', 'designation'].includes(selectedElement) && (
+                    {['recipientName', 'bodyBlock', 'authorityName', 'designation', 'authorityName2', 'designation2'].includes(selectedElement) && (
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-gray-700">Size (Scale)</label>
+                            <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                <span>Scale</span>
+                                <span className="font-mono text-gray-400">{((layout as any)[selectedElement].scale || 1).toFixed(2)}x</span>
+                            </label>
+
                             <input 
-                                type="range" min="0.5" max="2" step="0.05" 
-                                value={(layout as any)[selectedElement].scale}
+                                type="range" min="0.5" max="3" step="0.05" 
+                                value={(layout as any)[selectedElement].scale || 1}
                                 onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], scale: parseFloat(e.target.value) } })}
-                                className="w-full accent-blue-600"
+                                className="w-full accent-blue-600 cursor-ew-resize"
                             />
                         </div>
                     )}
                     
-                    {/* Size Option for Logo */}
-                    {selectedElement === 'logo' && (
+                    {/* Size Option for Logos */}
+                    {['logo', 'logo2', 'logo3', 'watermark'].includes(selectedElement) && (
+                        <>
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-gray-700">Logo Size</label>
+                            <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                <span>Logo Size</span>
+                                <span className="font-mono text-gray-400">
+                                   {Math.round((selectedElement === 'logo' ? previewData.logoPos.size : (layout as any)[selectedElement]?.size || 0.25) * 100)}%
+                                </span>
+                            </label>
                             <input 
-                                type="range" min="0.05" max="0.5" step="0.01" 
-                                value={previewData.logoPos.size}
-                                onChange={(e) => onLogoPosChange({ ...previewData.logoPos, size: parseFloat(e.target.value) })}
-                                className="w-full accent-blue-600"
+                                type="range" min="0.05" max="0.6" step="0.01" 
+                                value={selectedElement === 'logo' ? previewData.logoPos.size : (layout as any)[selectedElement]?.size || 0.25}
+                                onChange={(e) => {
+                                   if (selectedElement === 'logo') onLogoPosChange({ ...previewData.logoPos, size: parseFloat(e.target.value) });
+                                   else patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], size: parseFloat(e.target.value) } });
+                                }}
+                                className="w-full accent-blue-600 cursor-ew-resize"
                             />
                         </div>
+                        <div className="space-y-2 pt-4 border-t border-gray-100">
+                           <label className="text-sm font-semibold text-gray-700">Shape</label>
+                           <div className="flex gap-2">
+                              {['rectangle', 'rounded', 'circle', 'oval'].map(s => {
+                                 const currentShape = selectedElement === 'logo' ? previewData.logoPos.shape : (layout as any)[selectedElement]?.shape;
+                                 return (
+                                     <button
+                                        key={s} type="button"
+                                        onClick={() => {
+                                            if (selectedElement === 'logo') onLogoPosChange({ ...previewData.logoPos, shape: s as any });
+                                            else patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], shape: s as any } });
+                                        }}
+                                        className={`flex-1 py-1 text-[11px] capitalize rounded ${currentShape === s || (!currentShape && s === 'rectangle') ? 'bg-blue-100 text-blue-700 font-bold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                     >
+                                        {s}
+                                     </button>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                        {selectedElement !== 'logo' && (
+                           <div className="space-y-2 pt-4 border-t border-gray-100">
+                               <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                  <span>Opacity</span>
+                                  <span className="font-mono text-gray-400">{Math.round(((layout as any)[selectedElement]?.opacity ?? (selectedElement === 'watermark' ? 0.15 : 1)) * 100)}%</span>
+                               </label>
+                               <input 
+                                  type="range" min="0.05" max="1" step="0.05" 
+                                  value={(layout as any)[selectedElement]?.opacity ?? (selectedElement === 'watermark' ? 0.15 : 1)}
+                                  onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], opacity: parseFloat(e.target.value) } })}
+                                  className="w-full accent-blue-600"
+                               />
+                           </div>
+                        )}
+                        </>
                     )}
 
                     {/* Size and Dimensions for Signature */}
-                    {selectedElement === 'signature' && (
+                    {['signature', 'signature2'].includes(selectedElement) && (
                         <>
                             <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700">Width</label>
-                                <input 
-                                    type="range" min="0.1" max="0.5" step="0.01" 
-                                    value={layout.signature.w}
-                                    onChange={(e) => patchLayout({ signature: { ...layout.signature, w: parseFloat(e.target.value) } })}
-                                    className="w-full accent-blue-600"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-semibold text-gray-700">Height</label>
-                                <input 
-                                    type="range" min="0.05" max="0.3" step="0.01" 
-                                    value={layout.signature.h}
-                                    onChange={(e) => patchLayout({ signature: { ...layout.signature, h: parseFloat(e.target.value) } })}
-                                    className="w-full accent-blue-600"
+                                <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                    <span>Width</span>
+                                <span className="font-mono text-gray-400">{Math.round((layout as any)[selectedElement].w * 100)}%</span>
+                            </label>
+                            <input 
+                                type="range" min="0.1" max="0.6" step="0.01" 
+                                value={(layout as any)[selectedElement].w}
+                                onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], w: parseFloat(e.target.value) } })}
+                                className="w-full accent-blue-600 cursor-ew-resize"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                <span>Height</span>
+                                <span className="font-mono text-gray-400">{Math.round((layout as any)[selectedElement].h * 100)}%</span>
+                            </label>
+                            <input 
+                                type="range" min="0.05" max="0.4" step="0.01" 
+                                value={(layout as any)[selectedElement].h}
+                                onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], h: parseFloat(e.target.value) } })}
+                                    className="w-full accent-blue-600 cursor-ew-resize"
                                 />
                             </div>
                         </>
@@ -453,56 +558,175 @@ export default function FullVisualBuilder({
                     {/* QR Code */}
                     {selectedElement === 'qr' && (
                         <div className="space-y-2">
-                            <label className="text-sm font-semibold text-gray-700">QR Size</label>
+                             <label className="text-sm font-semibold text-gray-700 flex justify-between">
+                                <span>QR Size</span>
+                                <span className="font-mono text-gray-400">{Math.round(layout.qr.size * 100)}%</span>
+                            </label>
                             <input 
                                 type="range" min="0.05" max="0.3" step="0.01" 
                                 value={layout.qr.size}
                                 onChange={(e) => patchLayout({ qr: { ...layout.qr, size: parseFloat(e.target.value) } })}
-                                className="w-full accent-blue-600"
+                                className="w-full accent-blue-600 cursor-ew-resize"
                             />
                         </div>
                     )}
 
                     {/* Colors and Fonts (Optional/Future for backend compat) */}
-                    {['recipientName', 'bodyBlock', 'authorityName', 'designation'].includes(selectedElement) && (
+                    {['recipientName', 'bodyBlock', 'authorityName', 'designation', 'authorityName2', 'designation2'].includes(selectedElement) && (
                         <>
                             <div className="space-y-2 pt-4 border-t border-gray-100">
-                                <label className="text-sm font-semibold text-gray-700">Text Color</label>
-                                <div className="flex gap-2 items-center">
+                                <label className="text-sm font-semibold text-gray-700">Text Color Override</label>
+                                <div className="flex gap-3 items-center">
                                     <input 
                                         type="color" 
-                                        value={(layout as any)[selectedElement].color || '#000000'}
+                                        value={(layout as any)[selectedElement].color || (layout.theme as any)?.textColor || '#000000'}
                                         onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], color: e.target.value } })}
-                                        className="w-10 h-10 p-1 rounded border-gray-200 cursor-pointer"
+                                        className="w-8 h-8 rounded shrink-0 cursor-pointer border border-gray-200"
                                     />
-                                    <span className="text-xs text-gray-500">{(layout as any)[selectedElement].color || '#000000'}</span>
+                                    <button 
+                                        onClick={() => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], color: undefined } })}
+                                        className="text-xs text-red-500 hover:text-red-700 font-medium"
+                                    >Clear</button>
                                 </div>
                             </div>
                             <div className="space-y-2 pt-4 border-t border-gray-100">
-                                <label className="text-sm font-semibold text-gray-700">Font</label>
+                                <label className="text-sm font-semibold text-gray-700">Font Family</label>
                                 <select 
                                     value={(layout as any)[selectedElement].fontFamily || 'inherit'}
                                     onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], fontFamily: e.target.value } })}
-                                    className="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full rounded-lg border-gray-300 bg-white font-medium text-sm focus:ring-blue-500 focus:border-blue-500 py-2"
                                 >
-                                    <option value="inherit">Default (Template)</option>
-                                    <option value="Arial, sans-serif">Arial</option>
-                                    <option value="'Times New Roman', serif">Times New Roman</option>
-                                    <option value="'Courier New', monospace">Courier New</option>
+                                    <option value="inherit">Use Theme Default</option>
+                                    <option value="Helvetica, Arial, sans-serif">Helvetica / Sans</option>
+                                    <option value="'Times New Roman', serif">Times / Serif</option>
+                                    <option value="'Courier New', monospace">Courier / Mono</option>
+                                    <option value="'Montserrat', sans-serif">Montserrat (Modern)</option>
+                                    <option value="'Playfair Display', serif">Playfair Display (Premium)</option>
+                                    <option value="'Great Vibes', cursive">Great Vibes (Cursive)</option>
+                                    <option value="'Noto Sans Devanagari', sans-serif">Noto Sans Devanagari (Hindi)</option>
                                 </select>
+                            </div>
+                            
+                            {/* ADVANCED TYPOGRAPHY */}
+                            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Weight</label>
+                                    <select 
+                                        value={(layout as any)[selectedElement].fontWeight || 'normal'}
+                                        onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], fontWeight: e.target.value } })}
+                                        className="w-full text-xs border border-gray-300 rounded p-1"
+                                    >
+                                        <option value="normal">Normal</option>
+                                        <option value="bold">Bold</option>
+                                        <option value="italic">Italic</option>
+                                        <option value="bold-italic">Bold Italic</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase">Transform</label>
+                                    <select 
+                                        value={(layout as any)[selectedElement].textTransform || 'none'}
+                                        onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], textTransform: e.target.value } })}
+                                        className="w-full text-xs border border-gray-300 rounded p-1"
+                                    >
+                                        <option value="none">None</option>
+                                        <option value="uppercase">UPPERCASE</option>
+                                        <option value="lowercase">lowercase</option>
+                                        <option value="capitalize">Capitalize</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-2 pt-2">
+                                <label className="text-[10px] font-bold text-gray-500 uppercase flex justify-between">
+                                    <span>Letter Spacing</span>
+                                    <span className="font-mono text-gray-400">{(layout as any)[selectedElement].letterSpacing || 0}px</span>
+                                </label>
+                                <input 
+                                    type="range" min="-2" max="10" step="0.5" 
+                                    value={(layout as any)[selectedElement].letterSpacing || 0}
+                                    onChange={(e) => patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], letterSpacing: parseFloat(e.target.value) } })}
+                                    className="w-full accent-blue-600 cursor-ew-resize"
+                                />
                             </div>
                         </>
                     )}
                 </div>
             </div>
-         ) : (
-            <div className="p-8 text-center text-gray-400 flex flex-col items-center justify-center flex-1">
-                <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                </svg>
-                <p>Click on any text, logo, signature, or QR code on the certificate to edit its properties.</p>
+        ) : (
+            <div className="p-5 space-y-6">
+                <div className="mb-2">
+                    <h3 className="text-sm font-bold tracking-wide text-gray-700 uppercase mb-4">Global Theme</h3>
+                    
+                    <div className="space-y-5">
+                       <div className="space-y-2">
+                           <label className="text-sm font-semibold text-gray-700">Master Font Family</label>
+                           <select 
+                               value={(layout.theme as any)?.fontFamily || 'inherit'}
+                               onChange={(e) => patchLayout({ theme: { ...(layout.theme as any), fontFamily: e.target.value } })}
+                               className="w-full rounded-lg border-gray-300 bg-white font-medium text-sm focus:ring-blue-500 focus:border-blue-500 py-2 shadow-sm"
+                           >
+                               <option value="inherit">Template Default</option>
+                               <option value="Helvetica, Arial, sans-serif">Helvetica / Sans</option>
+                               <option value="'Times New Roman', Times, serif">Times / Serif</option>
+                               <option value="'Courier New', Courier, monospace">Courier / Mono</option>
+                               <option value="'Montserrat', sans-serif">Montserrat (Modern)</option>
+                               <option value="'Playfair Display', serif">Playfair Display (Premium)</option>
+                               <option value="'Great Vibes', cursive">Great Vibes (Cursive)</option>
+                               <option value="'Noto Sans Devanagari', sans-serif">Noto Sans Devanagari (Hindi)</option>
+                           </select>
+                       </div>
+
+                       <div className="space-y-3 pt-2">
+                           <label className="text-sm font-semibold text-gray-700">Color Palette</label>
+                           
+                           <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-white shadow-sm">
+                               <span className="text-xs font-medium text-gray-600">Background Tint</span>
+                               <div className="flex items-center gap-2">
+                                  <input type="color" value={(layout.theme as any)?.bgTint || '#ffffff'} onChange={e => patchLayout({ theme: { ...(layout.theme as any), bgTint: e.target.value } })} className="w-6 h-6 border-0 p-0 rounded overflow-hidden cursor-pointer shrink-0"/>
+                                  <button onClick={() => patchLayout({ theme: { ...(layout.theme as any), bgTint: undefined }})} className="text-[10px] text-gray-400 hover:text-red-500">Reset</button>
+                               </div>
+                           </div>
+                           
+                           <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-white shadow-sm">
+                               <span className="text-xs font-medium text-gray-600">Title Color</span>
+                               <div className="flex items-center gap-2">
+                                  <input type="color" value={(layout.theme as any)?.titleColor || '#000000'} onChange={e => patchLayout({ theme: { ...(layout.theme as any), titleColor: e.target.value } })} className="w-6 h-6 border-0 p-0 rounded overflow-hidden cursor-pointer shrink-0"/>
+                                  <button onClick={() => patchLayout({ theme: { ...(layout.theme as any), titleColor: undefined }})} className="text-[10px] text-gray-400 hover:text-red-500">Reset</button>
+                               </div>
+                           </div>
+
+                           <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-white shadow-sm">
+                               <span className="text-xs font-medium text-gray-600">Text Color</span>
+                               <div className="flex items-center gap-2">
+                                  <input type="color" value={(layout.theme as any)?.textColor || '#4b5563'} onChange={e => patchLayout({ theme: { ...(layout.theme as any), textColor: e.target.value } })} className="w-6 h-6 border-0 p-0 rounded overflow-hidden cursor-pointer shrink-0"/>
+                                  <button onClick={() => patchLayout({ theme: { ...(layout.theme as any), textColor: undefined }})} className="text-[10px] text-gray-400 hover:text-red-500">Reset</button>
+                               </div>
+                           </div>
+
+                           <div className="flex items-center justify-between border border-gray-100 p-2 rounded bg-white shadow-sm">
+                               <span className="text-xs font-medium text-gray-600">Border / Accent</span>
+                               <div className="flex items-center gap-2">
+                                  <input type="color" value={(layout.theme as any)?.accentColor || '#3b82f6'} onChange={e => patchLayout({ theme: { ...(layout.theme as any), accentColor: e.target.value } })} className="w-6 h-6 border-0 p-0 rounded overflow-hidden cursor-pointer shrink-0"/>
+                                  <button onClick={() => patchLayout({ theme: { ...(layout.theme as any), accentColor: undefined }})} className="text-[10px] text-gray-400 hover:text-red-500">Reset</button>
+                               </div>
+                           </div>
+
+                       </div>
+                    </div>
+                </div>
+
+                <div className="pt-6 border-t border-gray-200 mt-6 hidden">
+                   {/* We can add Multi-Signature or Multi-Logo panel controls here in the future if they want a sidebar list instead of canvas direct manip */}
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 mt-4">
+                    <p className="text-xs text-blue-800 flex gap-2">
+                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Click any element on the canvas (text, logo, signature) to edit its individual properties, resize, or drag to position.
+                    </p>
+                </div>
             </div>
-         )}
+        )}
       </div>
     </div>
   );

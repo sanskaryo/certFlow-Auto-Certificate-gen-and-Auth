@@ -31,35 +31,63 @@ export default function BrandingStep({
   onNext,
 }: BrandingStepProps) {
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const [logoUploading, setLogoUploading] = useState(false);
+  const logo2InputRef = useRef<HTMLInputElement>(null);
+  const watermarkInputRef = useRef<HTMLInputElement>(null);
+
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logo2Uploading, setLogo2Uploading] = useState(false);
+  const [watermarkUploading, setWatermarkUploading] = useState(false);
 
   const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
-  async function handleLogoUpload() {
-    const file = logoInputRef.current?.files?.[0];
+  async function handleLogoUpload(key: string = 'logo_path') {
+    let file: File | undefined;
+    if (key === 'logo_path') file = logoInputRef.current?.files?.[0];
+    else if (key === 'logo2') file = logo2InputRef.current?.files?.[0];
+    else if (key === 'watermark') file = watermarkInputRef.current?.files?.[0];
+
     if (!file) return;
-    setLogoUploading(true);
+
+    if (key === 'logo_path') setLogoUploading(true);
+    else if (key === 'logo2') setLogo2Uploading(true);
+    else if (key === 'watermark') setWatermarkUploading(true);
+
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch(`${API_BASE}/events/${eventId}/logo`, {
+      
+      const url = new URL(`${API_BASE}/events/${eventId}/logo`);
+      if (key !== 'logo_path') url.searchParams.append('key', key);
+
+      const res = await fetch(url.toString(), {
         method: 'POST',
         headers,
         body: fd,
       });
-      if (!res.ok) throw new Error('Upload failed');
+
+      if (!res.ok) {
+        throw new Error('Logo upload failed');
+      }
+
       const previewUrl = URL.createObjectURL(file);
-      onBrandingChange({ logoFile: file, logoPreviewUrl: previewUrl });
-      onNotify('Logo uploaded successfully', 'success');
+      
+      if (key === 'logo_path') {
+          onBrandingChange({ logoFile: file, logoPreviewUrl: previewUrl });
+      } else if (key === 'logo2') {
+          onBrandingChange({ logo2Url: previewUrl });
+      } else if (key === 'watermark') {
+          onBrandingChange({ watermarkUrl: previewUrl });
+      }
+      onNotify(`${key} uploaded successfully`, 'success');
     } catch {
-      onNotify('Logo upload failed', 'error');
+      onNotify('Upload failed', 'error');
     } finally {
-      setLogoUploading(false);
+      if (key === 'logo_path') setLogoUploading(false);
+      else if (key === 'logo2') setLogo2Uploading(false);
+      else if (key === 'watermark') setWatermarkUploading(false);
     }
   }
-
-  
 
   async function handleLogoPositionSave(pos: LogoPos) {
     onBrandingChange({ logoPos: pos });
@@ -189,26 +217,51 @@ export default function BrandingStep({
             />
             <button
               type="button"
-              onClick={handleLogoUpload}
+              onClick={() => handleLogoUpload()}
               disabled={logoUploading}
               className="px-4 py-2 bg-prime-600 hover:bg-prime-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 whitespace-nowrap"
             >
-              {logoUploading ? 'Uploading...' : 'Upload'}
+              {logoUploading ? 'Uploading...' : 'Upload Primary'}
             </button>
           </div>
 
-          {branding.logoPreviewUrl && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-gray-500 mb-2">Position Logo</p>
-              <LogoPositioner
-                logoUrl={branding.logoPreviewUrl}
-                initial={branding.logoPos}
-                onChange={pos => onBrandingChange({ logoPos: pos })}
-                onSave={handleLogoPositionSave}
-                templateColor={activeTemplate?.bg}
-              />
-            </div>
-          )}
+          <div className="mt-6 flex items-center gap-3 border-t border-gray-100 pt-4">
+            <input
+              ref={logo2InputRef}
+              type="file"
+              accept="image/*"
+              className="flex-1 text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+            />
+            <button
+              type="button"
+              onClick={() => handleLogoUpload('logo2')}
+              disabled={logo2Uploading}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 whitespace-nowrap"
+            >
+              {logo2Uploading ? 'Uploading...' : 'Upload Secondary Logo'}
+            </button>
+          </div>
+          
+          <div className="mt-6 flex items-center gap-3 border-t border-gray-100 pt-4">
+            <input
+              ref={watermarkInputRef}
+              type="file"
+              accept="image/*"
+              className="flex-1 text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+            />
+            <button
+              type="button"
+              onClick={() => handleLogoUpload('watermark')}
+              disabled={watermarkUploading}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-60 whitespace-nowrap"
+            >
+              {watermarkUploading ? 'Uploading...' : 'Upload Watermark'}
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-4 leading-relaxed bg-blue-50 p-2 rounded border border-blue-100">
+             Logos can be resized, positioned, rotated, and framed visually in the "Design Studio" step.
+          </p>
         </div>
       </details>
 

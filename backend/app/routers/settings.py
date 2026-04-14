@@ -22,6 +22,11 @@ class OrgSettingsUpdate(BaseModel):
     smtp_port: Optional[int] = None
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
+    admin_name: Optional[str] = None
+    admin_role: Optional[str] = None
+    admin_organization: Optional[str] = None
+    default_signature_path: Optional[str] = None
+    default_logo_path: Optional[str] = None
 
 @router.get("")
 async def get_settings(current_user: Any = Depends(get_current_user)):
@@ -39,7 +44,12 @@ async def get_settings(current_user: Any = Depends(get_current_user)):
         "smtp_host": user.get("smtp_host", ""),
         "smtp_port": user.get("smtp_port"),
         "smtp_username": user.get("smtp_username", ""),
-        "smtp_password": user.get("smtp_password", "")
+        "smtp_password": user.get("smtp_password", ""),
+        "admin_name": user.get("admin_name", ""),
+        "admin_role": user.get("admin_role", ""),
+        "admin_organization": user.get("admin_organization", ""),
+        "default_signature_path": user.get("default_signature_path", ""),
+        "default_logo_path": user.get("default_logo_path", "")
     }
 
 @router.patch("")
@@ -63,6 +73,11 @@ async def update_settings(payload: OrgSettingsUpdate, current_user: Any = Depend
     if payload.smtp_port is not None: update["smtp_port"] = payload.smtp_port
     if payload.smtp_username is not None: update["smtp_username"] = payload.smtp_username
     if payload.smtp_password is not None: update["smtp_password"] = payload.smtp_password
+    if payload.admin_name is not None: update["admin_name"] = payload.admin_name
+    if payload.admin_role is not None: update["admin_role"] = payload.admin_role
+    if payload.admin_organization is not None: update["admin_organization"] = payload.admin_organization
+    if payload.default_signature_path is not None: update["default_signature_path"] = payload.default_signature_path
+    if payload.default_logo_path is not None: update["default_logo_path"] = payload.default_logo_path
 
     if not update:
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -132,3 +147,49 @@ async def test_smtp(req: SMTPTestRequest, current_user: Any = Depends(get_curren
         return {"success": True, "message": "Test email sent successfully"}
     except Exception as e:
         return {"success": False, "message": str(e)}
+
+from fastapi import UploadFile, File, Form
+import os
+import uuid
+import shutil
+
+@router.post("/upload-asset")
+async def upload_org_asset(
+    asset_type: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: Any = Depends(get_current_user)
+):
+    if asset_type not in ["logo", "signature"]:
+        raise HTTPException(status_code=400, detail="Invalid asset type")
+
+    os.makedirs("uploads", exist_ok=True)
+    filename = f"{current_user['email'].replace('@', '_')}_default_{asset_type}_{uuid.uuid4().hex[:6]}.png"
+    filepath = os.path.join("uploads", filename)
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    db = get_database()
+    if asset_type == "signature":
+        try:
+            from PIL import Image
+            img = Image.open(filepath).convert("RGBA")
+            data = img.getdata()
+            new_data = []
+            for item in data:
+                # remove white backgrounds slightly
+                if item[0] > 220 and item[1] > 220 and item[2] > 220:
+                    new_data.append((255, 255, 255, 0))
+                else:
+                    new_data.append(item)
+            img.putdata(new_data)
+            img.save(filepath, "PNG")
+        except Exception:
+            pass
+        await db.users.update_one({"email": current_user["email"]}, {"$set": {"default_signature_path": filepath}})
+        return {"path": filepath, "message": "Signature saved"}
+    elif asset_type == "logo":
+        await db.users.update_one({"email": current_user["email"]}, {"$set": {"default_logo_path": filepath}})
+        return {"path": filepath, "message": "Logo saved"}
+    
+    return {"message": "Success"}

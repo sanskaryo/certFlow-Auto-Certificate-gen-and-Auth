@@ -7,6 +7,7 @@ import logging
 from typing import Any, List, Optional
 import hashlib
 import secrets
+from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
 import pandas as pd
@@ -240,35 +241,88 @@ async def generate_ai_template_endpoint(event_id: str, payload: AITemplateReques
 
 
 @router.post("/{event_id}/logo")
-async def upload_logo(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
+async def upload_logo(
+    event_id: str, 
+    file: UploadFile = File(...), 
+    key: Optional[str] = "logo_path", 
+    current_user: Any = Depends(get_current_user)
+):
     await _require_event_access(event_id, current_user, {"issuer"})
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_logo_{file.filename}"))
+    file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_{key}_{file.filename}"))
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
     db = get_database()
-    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"logo_path": file_path}})
+    if key == "logo_path":
+        update = {"logo_path": file_path}
+    else:
+        update = {f"additional_logos.{key}": file_path}
+    
+    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
-    return {"message": "Logo uploaded successfully", "logo_path": file_path}
+    return {"message": "Logo uploaded successfully", "logo_path": file_path, "key": key}
 
 
 @router.post("/{event_id}/signature")
-async def upload_signature(event_id: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_user)):
+async def upload_signature(
+    event_id: str, 
+    file: UploadFile = File(...), 
+    key: Optional[str] = "signature_path",
+    current_user: Any = Depends(get_current_user)
+):
     await _require_event_access(event_id, current_user, {"issuer"})
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_sig_{file.filename}"))
+    raw_bytes = await file.read()
+    processed_bytes = raw_bytes
+    ext = file.filename.split('.')[-1].lower() if '.' in file.filename else 'png'
+
+    try:
+        from PIL import Image, ImageChops
+        img = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
+        
+        # 1. White to transparent
+        datas = img.getdata()
+        new_data = []
+        for item in datas:
+            # if almost white, make transparent
+            if item[0] > 220 and item[1] > 220 and item[2] > 220:
+                new_data.append((255, 255, 255, 0))
+            else:
+                new_data.append(item)
+        img.putdata(new_data)
+        
+        # 2. Auto-crop whitespace
+        bg = Image.new("RGBA", img.size, (255, 255, 255, 0))
+        diff = ImageChops.difference(img, bg)
+        bbox = diff.getbbox()
+        if bbox:
+            img = img.crop(bbox)
+            
+        out = io.BytesIO()
+        img.save(out, format="PNG")
+        processed_bytes = out.getvalue()
+        ext = "png"
+    except Exception as e:
+        logger.error(f"Failed to process signature transparency: {e}")
+
+    file_path = os.path.abspath(os.path.join(UPLOAD_DIR, f"{event_id}_{key}_processed.{ext}"))
     with open(file_path, "wb") as f:
-        f.write(await file.read())
+        f.write(processed_bytes)
 
     db = get_database()
-    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": {"signature_path": file_path}})
+    if key == "signature_path":
+        update = {"signature_path": file_path}
+    else:
+        update = {f"additional_signatures.{key}": file_path}
+
+    result = await db.events.update_one({"_id": ObjectId(event_id)}, {"$set": update})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
-    return {"message": "Signature uploaded successfully", "signature_path": file_path}
+    return {"message": "Signature uploaded successfully", "signature_path": file_path, "key": key}
 
 
 class EventAuthorityUpdate(BaseModel):

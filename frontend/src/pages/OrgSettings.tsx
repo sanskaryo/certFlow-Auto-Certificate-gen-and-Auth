@@ -18,6 +18,11 @@ type Settings = {
   smtp_port: string; // use string for easy input mapping
   smtp_username: string;
   smtp_password: string;
+  admin_name: string;
+  admin_role: string;
+  admin_organization: string;
+  default_signature_path: string;
+  default_logo_path: string;
 };
 
 function useToken() {
@@ -40,6 +45,11 @@ export default function OrgSettings() {
     smtp_port: '',
     smtp_username: '',
     smtp_password: '',
+    admin_name: '',
+    admin_role: '',
+    admin_organization: '',
+    default_signature_path: '',
+    default_logo_path: '',
   });
   
   const [apiKeys, setApiKeys] = useState<any[]>([]);
@@ -99,6 +109,37 @@ export default function OrgSettings() {
       setSaving(false);
     }
   };
+
+  const handleUploadAsset = async (e: React.ChangeEvent<HTMLInputElement>, asset_type: 'logo' | 'signature') => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('asset_type', asset_type);
+
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/settings/upload-asset`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      
+      setSettings(s => ({
+        ...s,
+        [asset_type === 'logo' ? 'default_logo_path' : 'default_signature_path']: data.path
+      }));
+      notify('Asset uploaded correctly');
+    } catch (err: any) {
+      notify(err.message, false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const triggerVerify = async () => {
     setVerifying(true);
@@ -414,6 +455,95 @@ export default function OrgSettings() {
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.remove_branding ? 'bg-prime-600' : 'bg-gray-200'}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${settings.remove_branding ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </section>
+
+        {/* Authority Defaults */}
+        <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-5">
+          <div>
+            <h2 className="font-bold text-gray-800 text-lg">Authority Profile</h2>
+            <p className="text-sm text-gray-500">Configure default details pre-filled for certificates.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Authority Name</label>
+              <input 
+                placeholder="Dr. John Doe" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.admin_name || ''} onChange={e => setSettings(s => ({...s, admin_name: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Authority Role</label>
+              <input 
+                placeholder="Director of Programs" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.admin_role || ''} onChange={e => setSettings(s => ({...s, admin_role: e.target.value}))}
+              />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Organization / Branch</label>
+              <input 
+                placeholder="College of Engineering" 
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:ring-2 focus:ring-prime-500 outline-none"
+                value={settings.admin_organization || ''} onChange={e => setSettings(s => ({...s, admin_organization: e.target.value}))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 mt-2">
+             <div className="space-y-2">
+               <label className="text-xs font-semibold text-gray-500 uppercase">Default Signature</label>
+               {settings.default_signature_path ? (
+                 <div className="relative group rounded-xl border border-gray-200 p-4 bg-gray-50 flex items-center justify-center min-h-[100px]">
+                   <img src={`${API_BASE.replace('/api/v1', '')}/${settings.default_signature_path}`} alt="Signature" className="max-h-16 object-contain" />
+                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-xl">
+                      <button onClick={() => setSettings(s => ({...s, default_signature_path: ''}))} className="bg-white text-red-600 px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm hover:bg-red-50">Remove</button>
+                   </div>
+                 </div>
+               ) : (
+                 <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 flex flex-col items-center justify-center hover:bg-gray-50 hover:border-prime-400 transition cursor-pointer" onClick={() => document.getElementById('upload-def-sig')?.click()}>
+                   <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                   <span className="text-xs font-medium text-gray-500">Upload Signature</span>
+                 </div>
+               )}
+               <input id="upload-def-sig" type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleUploadAsset(e, 'signature')} />
+             </div>
+
+             <div className="space-y-2">
+               <label className="text-xs font-semibold text-gray-500 uppercase">Default Logo</label>
+               {settings.default_logo_path ? (
+                 <div className="relative group rounded-xl border border-gray-200 p-4 bg-gray-50 flex items-center justify-center min-h-[100px]">
+                   <img src={`${API_BASE.replace('/api/v1', '')}/${settings.default_logo_path}`} alt="Logo" className="max-h-16 object-contain" />
+                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-xl">
+                      <button onClick={() => setSettings(s => ({...s, default_logo_path: ''}))} className="bg-white text-red-600 px-3 py-1.5 text-xs font-bold rounded-lg shadow-sm hover:bg-red-50">Remove</button>
+                   </div>
+                 </div>
+               ) : (
+                 <div className="rounded-xl border-2 border-dashed border-gray-200 p-6 flex flex-col items-center justify-center hover:bg-gray-50 hover:border-prime-400 transition cursor-pointer" onClick={() => document.getElementById('upload-def-log')?.click()}>
+                   <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0V19a2 2 0 01-2 2h-12a2 2 0 01-2-2v-5z" /></svg>
+                   <span className="text-xs font-medium text-gray-500">Upload Logo</span>
+                 </div>
+               )}
+               <input id="upload-def-log" type="file" accept="image/png, image/jpeg" className="hidden" onChange={e => handleUploadAsset(e, 'logo')} />
+             </div>
+          </div>
+
+          <div className="flex items-center pt-2">
+            <button
+              onClick={() => save({
+                admin_name: settings.admin_name,
+                admin_role: settings.admin_role,
+                admin_organization: settings.admin_organization,
+                default_signature_path: settings.default_signature_path,
+                default_logo_path: settings.default_logo_path,
+              })}
+              disabled={saving}
+              className="px-6 py-2.5 bg-prime-600 hover:bg-prime-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+            >
+              Save Authority Profile
             </button>
           </div>
         </section>

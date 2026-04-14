@@ -33,24 +33,50 @@ def _verify_base_url() -> str:
     return base
 
 TEMPLATE_PRESETS: dict[str, dict[str, str]] = {
-    "classic-blue":        {"bg": "#e8f1ff", "title": "#1d4ed8", "text": "#374151", "accent": "#60a5fa"},
-    "emerald-clean":       {"bg": "#ecfdf5", "title": "#047857", "text": "#374151", "accent": "#34d399"},
-    "sunset-gold":         {"bg": "#fff7ed", "title": "#b45309", "text": "#374151", "accent": "#fbbf24"},
-    "royal-purple":        {"bg": "#f5f3ff", "title": "#6d28d9", "text": "#374151", "accent": "#a78bfa"},
-    "modern-cyan":         {"bg": "#ecfeff", "title": "#0e7490", "text": "#374151", "accent": "#22d3ee"},
-    "noir-luxe":           {"bg": "#111827", "title": "#f9fafb", "text": "#f3f4f6", "accent": "#4b5563"},
-    "hackathon-neon":      {"bg": "#0f172a", "title": "#22d3ee", "text": "#f8fafc",  "accent": "#e879f9"},
-    "traditional-elegant": {"bg": "#fefce8", "title": "#713f12", "text": "#451a03", "accent": "#ca8a04"},
-    "modern-colorful":     {"bg": "#ffffff", "title": "#ec4899", "text": "#111827", "accent": "#8b5cf6"},
-    # New event-suited templates
-    "sports-champion":     {"bg": "#fff1f2", "title": "#be123c", "text": "#1c1917", "accent": "#f43f5e"},
+    # Academic
+    "academic-classic":    {"bg": "#f8f9fa", "title": "#1e3a8a", "text": "#1e293b", "accent": "#3b82f6"},
     "academic-navy":       {"bg": "#f0f4ff", "title": "#1e3a8a", "text": "#1e293b", "accent": "#3b82f6"},
-    "cultural-fest":       {"bg": "#fdf4ff", "title": "#7e22ce", "text": "#3b0764", "accent": "#d946ef"},
+    "university-prestige": {"bg": "#fffdfa", "title": "#581c87", "text": "#1e293b", "accent": "#7e22ce"},
+    
+    # Corporate
     "corporate-silver":    {"bg": "#f8fafc", "title": "#334155", "text": "#1e293b", "accent": "#94a3b8"},
-    "nature-green":        {"bg": "#f0fdf4", "title": "#15803d", "text": "#14532d", "accent": "#4ade80"},
-    "warm-appreciation":   {"bg": "#fffbeb", "title": "#92400e", "text": "#451a03", "accent": "#f59e0b"},
+    "executive-gold":      {"bg": "#fffdf5", "title": "#854d0e", "text": "#334155", "accent": "#ca8a04"},
+    "business-clean":      {"bg": "#ffffff", "title": "#0f172a", "text": "#334155", "accent": "#3b82f6"},
+
+    # Hackathon
+    "hackathon-neon":      {"bg": "#0f172a", "title": "#22d3ee", "text": "#f8fafc",  "accent": "#e879f9"},
     "tech-dark":           {"bg": "#020617", "title": "#38bdf8", "text": "#e2e8f0", "accent": "#818cf8"},
+    "cyber-matrix":        {"bg": "#000000", "title": "#4ade80", "text": "#f1f5f9", "accent": "#22c55e"},
+
+    # Workshop & Bootcamp
+    "workshop-modern":     {"bg": "#fdf4ff", "title": "#9d174d", "text": "#374151", "accent": "#f472b6"},
+    "bootcamp-bold":       {"bg": "#fef2f2", "title": "#991b1b", "text": "#1f2937", "accent": "#ef4444"},
+
+    # Sports
+    "sports-champion":     {"bg": "#fff1f2", "title": "#be123c", "text": "#1c1917", "accent": "#f43f5e"},
+    "athletics-dynamic":   {"bg": "#fdf8f6", "title": "#c2410c", "text": "#1c1917", "accent": "#f97316"},
+
+    # Participation & Appreciations
     "volunteer-teal":      {"bg": "#f0fdfa", "title": "#0f766e", "text": "#134e4a", "accent": "#2dd4bf"},
+    "warm-appreciation":   {"bg": "#fffbeb", "title": "#92400e", "text": "#451a03", "accent": "#f59e0b"},
+    "cultural-fest":       {"bg": "#fdf4ff", "title": "#7e22ce", "text": "#3b0764", "accent": "#d946ef"},
+
+    # Achievement
+    "achievement-gold":    {"bg": "#fffcf0", "title": "#b45309", "text": "#1c1917", "accent": "#fbbf24"},
+    "excellence-blue":     {"bg": "#eff6ff", "title": "#1d4ed8", "text": "#1e293b", "accent": "#60a5fa"},
+
+    # Premium / Luxury
+    "noir-luxe":           {"bg": "#111827", "title": "#f9fafb", "text": "#f3f4f6", "accent": "#4b5563"},
+    "traditional-elegant": {"bg": "#fefce8", "title": "#713f12", "text": "#451a03", "accent": "#ca8a04"},
+    "royal-purple":        {"bg": "#f5f3ff", "title": "#6d28d9", "text": "#374151", "accent": "#a78bfa"},
+
+    # Minimalist
+    "minimalist-white":    {"bg": "#ffffff", "title": "#171717", "text": "#404040", "accent": "#a3a3a3"},
+    "emerald-clean":       {"bg": "#ecfdf5", "title": "#047857", "text": "#374151", "accent": "#34d399"},
+
+    # Modern
+    "modern-colorful":     {"bg": "#ffffff", "title": "#ec4899", "text": "#111827", "accent": "#8b5cf6"},
+    "modern-cyan":         {"bg": "#ecfeff", "title": "#0e7490", "text": "#374151", "accent": "#22d3ee"},
 }
 
 
@@ -58,25 +84,33 @@ def template_catalog() -> list[dict[str, str]]:
     return [{"id": k, "name": k.replace("-", " ").title(), **v} for k, v in TEMPLATE_PRESETS.items()]
 
 
-DEFAULT_CERTIFICATE_LAYOUT: dict[str, dict[str, float]] = {
-    "signature": {"x": 0.66, "y": 0.66, "w": 0.24, "h": 0.12},
-    "authorityName": {"x": 0.78, "y": 0.8, "scale": 1.0},
-    "designation": {"x": 0.78, "y": 0.87, "scale": 0.95},
-    "recipientName": {"x": 0.5, "y": 0.4, "scale": 1.0},
-    "bodyBlock": {"x": 0.5, "y": 0.52, "scale": 1.0},
-    "qr": {"x": 0.82, "y": 0.7, "size": 0.12},
-}
-
-
-def _merge_certificate_layout(raw: dict | None) -> dict[str, dict[str, float]]:
-    base = {k: dict(v) for k, v in DEFAULT_CERTIFICATE_LAYOUT.items()}
-    if not raw:
+def _merge_certificate_layout(layout_dict: dict | None) -> dict[str, Any]:
+    base = {
+        "signature": {"x": 0.66, "y": 0.66, "w": 0.24, "h": 0.12},
+        "authorityName": {"x": 0.78, "y": 0.8, "scale": 1.0},
+        "designation": {"x": 0.78, "y": 0.87, "scale": 0.95},
+        "signature2": {"x": 0.1, "y": 0.66, "w": 0.24, "h": 0.12},
+        "authorityName2": {"x": 0.22, "y": 0.8, "scale": 1.0},
+        "designation2": {"x": 0.22, "y": 0.87, "scale": 0.95},
+        "recipientName": {"x": 0.5, "y": 0.4, "scale": 1.0},
+        "bodyBlock": {"x": 0.5, "y": 0.52, "scale": 1.0},
+        "qr": {"x": 0.82, "y": 0.7, "size": 0.12},
+        "logo2": {"x": 0.82, "y": 0.05, "size": 0.12},
+        "logo3": {"x": 0.05, "y": 0.82, "size": 0.12},
+        "watermark": {"x": 0.35, "y": 0.35, "size": 0.3, "opacity": 0.15},
+    }
+    if not layout_dict:
         return base
-    for k, v in raw.items():
+        
+    for k, v in layout_dict.items():
         if isinstance(v, dict) and k in base:
             base[k].update(v)
         elif isinstance(v, dict):
             base[k] = v
+            
+    if "theme" in layout_dict:
+        base["theme"] = layout_dict["theme"]
+        
     return base
 
 
@@ -141,6 +175,60 @@ def _fit_text(c_obj, text: str, max_width: float, max_font_size: int, font: str)
             return size
         size -= 2
     return size
+
+def _map_font(font_val: str, bold: bool = False, italic: bool = False, weight: str = "normal") -> str | None:
+    if not font_val or font_val == "inherit":
+        return None
+    f = font_val.lower()
+    if weight in ["bold", "bold-italic"]: bold = True
+    if weight in ["italic", "bold-italic"]: italic = True
+
+    if "arial" in f or "helvetica" in f or "sans" in f:
+        if bold and italic: return "Helvetica-BoldOblique"
+        if bold: return "Helvetica-Bold"
+        if italic: return "Helvetica-Oblique"
+        return "Helvetica"
+    elif "times" in f or "serif" in f:
+        if bold and italic: return "Times-BoldItalic"
+        if bold: return "Times-Bold"
+        if italic: return "Times-Italic"
+        return "Times-Roman"
+    elif "courier" in f or "mono" in f:
+        if bold and italic: return "Courier-BoldOblique"
+        if bold: return "Courier-Bold"
+        if italic: return "Courier-Oblique"
+        return "Courier"
+    if bold: return "Helvetica-Bold"
+    return "Helvetica"
+
+
+def _draw_custom_text(c_obj: canvas.Canvas, text: str, x: float, y: float, base_font: str, size: float, element: dict):
+    # Determine font given element config
+    weight = element.get("fontWeight", "normal")
+    f_name = _map_font(element.get("fontFamily"), weight=weight) or _map_font(base_font, weight=weight) or base_font
+
+    # Text transform
+    transform = element.get("textTransform", "none")
+    if transform == "uppercase": text = text.upper()
+    elif transform == "lowercase": text = text.lower()
+    elif transform == "capitalize": text = text.title()
+
+    letter_spacing = float(element.get("letterSpacing", 0))
+
+    if letter_spacing == 0:
+        c_obj.setFont(f_name, size)
+        c_obj.drawCentredString(x, y, text)
+    else:
+        # Calculate full width including tracking
+        raw_width = c_obj.stringWidth(text, f_name, size)
+        total_width = raw_width + max(0, len(text) - 1) * letter_spacing
+        
+        tx = c_obj.beginText()
+        tx.setFont(f_name, size)
+        tx.setCharSpace(letter_spacing)
+        tx.setTextOrigin(x - total_width / 2.0, y)
+        tx.textOut(text)
+        c_obj.drawText(tx)
 
 
 def _render_overlay_pdf(participant: dict, event: dict, cert_id: str, qr_path: str) -> str:
@@ -245,8 +333,14 @@ def _generate_standalone_pdf(
     c = canvas.Canvas(output_path, pagesize=landscape(A4))
     width, height = landscape(A4)
     L = _merge_certificate_layout(certificate_layout)
-    style = TEMPLATE_PRESETS.get(template_id, TEMPLATE_PRESETS["classic-blue"])
+    style = dict(TEMPLATE_PRESETS.get(template_id, TEMPLATE_PRESETS["academic-classic"]))
     
+    theme = L.get("theme", {})
+    if theme.get("bgTint"): style["bg"] = theme["bgTint"]
+    if theme.get("titleColor"): style["title"] = theme["titleColor"]
+    if theme.get("textColor"): style["text"] = theme["textColor"]
+    if theme.get("accentColor"): style["accent"] = theme["accentColor"]
+
     logger.info(f"Initializing PDF generation. template_id={template_id}, template_path={template_path}")
 
     # Background
@@ -371,6 +465,12 @@ def _generate_standalone_pdf(
     font_bold = "Courier-Bold" if template_id in ("hackathon-neon", "tech-dark") else (
         "Times-Bold" if template_id in ("traditional-elegant", "academic-navy", "warm-appreciation", "cultural-fest") else "Helvetica-Bold"
     )
+
+    t_font = _map_font(theme.get("fontFamily", "inherit"))
+    t_font_bold = _map_font(theme.get("fontFamily", "inherit"), bold=True)
+    if t_font:
+        font_main = t_font
+        font_bold = t_font_bold
     
     c.setFont(font_main, 18)
     c.drawCentredString(width / 2, height - 180, "This certifies that")
@@ -378,29 +478,44 @@ def _generate_standalone_pdf(
     rec = L["recipientName"]
     rx = float(rec["x"]) * width
     rec_scale = float(rec.get("scale", 1.0))
-    # Title-case the name so it always looks properly formatted
     display_name = participant_name.title()
-    name_font_size = int(_fit_text(c, display_name, width - 120, 36, font_bold) * rec_scale)
+    
+    # Overrides for recipient name
+    name_font = _map_font(rec.get("fontFamily")) or font_bold
+    if rec.get("color"):
+         c.setFillColor(rec["color"])
+    elif theme.get("titleColor"):
+         c.setFillColor(theme["titleColor"])
+    else:
+         c.setFillColor(style["title"])
+
+    name_font_size = int(_fit_text(c, display_name, width - 120, 36, name_font) * rec_scale)
     name_font_size = max(10, min(48, name_font_size))
-    c.setFont(font_bold, name_font_size)
-    c.drawCentredString(rx, _baseline_from_top(float(rec["y"]), height, name_font_size), display_name)
+    _draw_custom_text(
+        c, display_name, rx, _baseline_from_top(float(rec["y"]), height, name_font_size), font_bold, name_font_size, rec
+    )
 
     lines = _get_intelligent_wording(role, event_name)
 
     bb = L["bodyBlock"]
     bb_scale = float(bb.get("scale", 1.0))
     bx = float(bb["x"]) * width
+    
     body_font = max(10, int(18 * bb_scale))
-    c.setFont(font_main, body_font)
+    
+    if bb.get("color"):
+         c.setFillColor(bb["color"])
+    else:
+         c.setFillColor(style.get("text", "#374151"))
+         
     y0 = _baseline_from_top(float(bb["y"]), height, body_font)
-    c.drawCentredString(bx, y0, lines[0])
+    _draw_custom_text(c, lines[0], bx, y0, font_main, body_font, bb)
 
     line_gap = 32 * bb_scale      # tighter gap so lines feel connected
     y_ptr = y0 - line_gap
     if lines[1]:
-        c.drawCentredString(bx, y_ptr, lines[1])
+        _draw_custom_text(c, lines[1], bx, y_ptr, font_main, body_font, bb)
         y_ptr -= line_gap
-
     # Always show the organization name the user filled in
     c.drawCentredString(bx, y_ptr, f"organized by {organization}")
 
@@ -437,29 +552,35 @@ def _generate_standalone_pdf(
         if not os.path.exists(logo_path):
              logo_path = os.path.abspath(os.path.join("uploads", os.path.basename(logo_path)))
 
-    # Logo — position driven by logo_position dict, default top-left
-    if logo_path and os.path.exists(logo_path):
+    def draw_logo_pos(l_path, pos_conf, is_watermark=False):
+        if not l_path or not os.path.exists(l_path): return
+        if pos_conf.get("hidden"): return
         try:
-            pos = logo_position or {}
-            size_frac = float(pos.get("size", 0.25))   # fraction of cert width
+            size_frac = float(pos_conf.get("size", 0.25))   # fraction of cert width
             logo_w = width * size_frac
-            
             try:
                 from reportlab.lib.utils import ImageReader
-                ir = ImageReader(logo_path)
+                ir = ImageReader(l_path)
                 act_w, act_h = ir.getSize()
                 logo_h = logo_w * (act_h / act_w)
             except Exception:
                 logo_h = logo_w
 
-            # x/y are fractions (0-1). x=0 → left edge, y=1 → top edge (PDF coords: y=0 is bottom)
-            x_frac = float(pos.get("x", 0.03))
-            y_frac = float(pos.get("y", 0.82))
-            shape = pos.get("shape", "rectangle")
+            x_frac = float(pos_conf.get("x", 0.03))
+            y_frac = float(pos_conf.get("y", 0.82))
+            shape = pos_conf.get("shape", "rectangle")
+            opacity = float(pos_conf.get("opacity", 1.0))
+            if is_watermark and "opacity" not in pos_conf: opacity = 0.15
             logo_x = width * x_frac
-            logo_y = height * y_frac - logo_h           # anchor top of logo at y_frac
-            
+            logo_y = height * y_frac - logo_h
+
             c.saveState()
+            if opacity < 1.0:
+                # Need to use graphics state for alpha, not easily supported in base reportlab primitives without platypus or specialized pdfgen state. We'll simply ignore opacity unless we use fill stroke Alpha.
+                # Since reportlab doesn't easily set alpha of an image via drawImage (unless embedded in drawing), we'll do a simple trick if possible.
+                c.setFillAlpha(opacity)
+                c.setStrokeAlpha(opacity)
+
             if shape in ("circle", "rounded", "oval"):
                 p = c.beginPath()
                 if shape == "circle":
@@ -472,66 +593,77 @@ def _generate_standalone_pdf(
                     p.ellipse(logo_x, logo_y, logo_w, logo_h)
                 c.clipPath(p, stroke=0, fill=0)
 
-            c.drawImage(logo_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+            c.drawImage(l_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
             c.restoreState()
-            logger.info(f"Drew logo at ({logo_x:.0f},{logo_y:.0f}) size={logo_w:.0f} shape={shape}")
         except Exception as e:
-            logger.error(f"Failed to draw logo from {logo_path}: {e}")
+            logger.error(f"Failed to draw logo: {e}")
+
+    draw_logo_pos(logo_path, logo_position or {})
+    
+    extra_logos = event.get("additional_logos", {}) if isinstance(event, dict) else {}
+    if L.get("logo2") and extra_logos.get("logo2"): draw_logo_pos(extra_logos["logo2"], L["logo2"])
+    if L.get("logo3") and extra_logos.get("logo3"): draw_logo_pos(extra_logos["logo3"], L["logo3"])
+    if L.get("watermark") and extra_logos.get("watermark"): draw_logo_pos(extra_logos["watermark"], L["watermark"], is_watermark=True)
 
     # Signature + Authority — stacked cleanly: image → line → name → position
     if signature_path:
         if not os.path.exists(signature_path):
             signature_path = os.path.abspath(os.path.join("uploads", os.path.basename(signature_path)))
 
-    has_sig  = bool(signature_path and os.path.exists(signature_path))
-    has_auth = bool(authority_name or authority_position)
+    def draw_signature_block(sig_image, a_name, a_pos, l_sig, l_auth_n, l_desig):
+        if not l_sig or l_sig.get("hidden"): return
+        
+        sig_w  = float(l_sig.get("w", 0.24)) * width
+        sig_h  = float(l_sig.get("h", 0.12)) * height
+        sig_x  = float(l_sig.get("x", 0.66)) * width
+        sig_top_pdf = height * (1.0 - float(l_sig.get("y", 0.66)))
+        sig_img_y   = sig_top_pdf - sig_h
 
-    if has_sig or has_auth:
-        sig_l  = L["signature"]
-        sig_w  = float(sig_l["w"]) * width
-        sig_h  = float(sig_l["h"]) * height
-        sig_x  = float(sig_l["x"]) * width
-        # Top of signature image in PDF coords (y=0 at bottom)
-        sig_top_pdf = height * (1.0 - float(sig_l["y"]))
-        sig_img_y   = sig_top_pdf - sig_h        # bottom-left corner of image
-
-        # 1. Draw signature image
-        if has_sig:
+        if sig_image and os.path.exists(sig_image):
             try:
-                c.drawImage(
-                    signature_path, sig_x, sig_img_y,
-                    width=sig_w, height=sig_h,
-                    preserveAspectRatio=True, mask="auto",
-                )
-                logger.info(f"Drew signature at ({sig_x:.0f}, {sig_img_y:.0f})")
+                c.drawImage(sig_image, sig_x, sig_img_y, width=sig_w, height=sig_h, preserveAspectRatio=True, mask="auto")
                 block_bottom = sig_img_y
-            except Exception as e:
-                logger.error(f"Failed to draw signature: {e}")
+            except:
                 block_bottom = sig_top_pdf
         else:
             block_bottom = sig_top_pdf
 
-        # 2. Divider line just below the signature image (or start of block)
         line_y = block_bottom - 6
         c.setStrokeColor(style.get("accent", "#9ca3af"))
         c.setLineWidth(1)
         c.line(sig_x, line_y, sig_x + sig_w, line_y)
 
-        # 3. Authority name then position, centred on the sig block
         text_cx = sig_x + sig_w / 2
         text_y  = line_y - 16
 
-        c.setFillColor(style.get("text", "#374151"))
-        if authority_name:
-            fs = max(9, int(13 * float(L["authorityName"].get("scale", 1.0))))
-            c.setFont(font_bold, fs)
-            c.drawCentredString(text_cx, text_y, authority_name.title())
+        if a_name and not l_auth_n.get("hidden"):
+            c.setFillColor(l_auth_n.get("color") or theme.get("textColor") or style.get("text", "#374151"))
+            fs = max(9, int(13 * float(l_auth_n.get("scale", 1.0))))
+            _draw_custom_text(
+                c, a_name.title(), text_cx, text_y, font_bold, fs, l_auth_n
+            )
             text_y -= fs + 4
 
-        if authority_position:
-            fs2 = max(8, int(11 * float(L["designation"].get("scale", 1.0))))
-            c.setFont(font_main, fs2)
-            c.drawCentredString(text_cx, text_y, authority_position.title())
+        if a_pos and not l_desig.get("hidden"):
+            c.setFillColor(l_desig.get("color") or theme.get("textColor") or style.get("text", "#374151"))
+            fs2 = max(8, int(11 * float(l_desig.get("scale", 1.0))))
+            _draw_custom_text(
+                c, a_pos.title(), text_cx, text_y, font_main, fs2, l_desig
+            )
+
+    has_sig1 = bool(signature_path and os.path.exists(signature_path))
+    has_auth1 = bool(authority_name or authority_position)
+    if has_sig1 or has_auth1:
+        draw_signature_block(signature_path, authority_name, authority_position, L["signature"], L["authorityName"], L["designation"])
+
+    extra_sigs = event.get("additional_signatures", {}) if isinstance(event, dict) else {}
+    a2_name = extra_sigs.get("name2", "")
+    a2_pos = extra_sigs.get("position2", "")
+    a2_img = extra_sigs.get("signature_path2", "")
+    if a2_img and not os.path.exists(a2_img): a2_img = os.path.abspath(os.path.join("uploads", os.path.basename(a2_img)))
+    
+    if (a2_name or a2_pos or a2_img) and L.get("signature2"):
+        draw_signature_block(a2_img, a2_name, a2_pos, L["signature2"], L.get("authorityName2", {}), L.get("designation2", {}))
 
     c.save()
 
