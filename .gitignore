@@ -21,13 +21,14 @@ venv/
 
 .kiro\specs
 kiro
+
 .kiro.*
-.kiro
+
 # Environment and secrets
 .env
 .env.*
 !.env.example
-.vscode
+
 # Runtime-generated folders
 uploads/
 generated_certs/
@@ -66,7 +67,6 @@ frontend/node_modules/flatted/esm.js
 frontend/node_modules/flatted/esm.js
 frontend/node_modules/flatted/esm.js
 .kiro/specs/certificate-studio-redesign/design.md
+.kiro/specs/certificate-studio-redesign/.config.kiro
 .kiro/specs/certificate-studio-redesign/tasks.md
 .kiro/specs/certificate-studio-redesign/requirements.md
-frontend/node_modules/flatted/es.js
-frontend/node_modules/flatted/esm.js

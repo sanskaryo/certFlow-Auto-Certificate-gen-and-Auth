@@ -294,6 +294,7 @@ class LogoPositionUpdate(BaseModel):
     x: float = Field(..., ge=0, le=1, description="X position as fraction of certificate width (0=left, 1=right)")
     y: float = Field(..., ge=0, le=1, description="Y position as fraction of certificate height (0=bottom, 1=top)")
     size: float = Field(default=0.25, ge=0.05, le=0.8, description="Logo size as fraction of certificate width")
+    shape: str = Field(default="rectangle", description="Logo frame shape: rectangle, rounded, circle, oval")
 
 
 @router.patch("/{event_id}/logo-position")
@@ -302,7 +303,7 @@ async def update_logo_position(event_id: str, payload: LogoPositionUpdate, curre
     db = get_database()
     result = await db.events.update_one(
         {"_id": ObjectId(event_id)},
-        {"$set": {"logo_position": {"x": payload.x, "y": payload.y, "size": payload.size}}},
+        {"$set": {"logo_position": {"x": payload.x, "y": payload.y, "size": payload.size, "shape": payload.shape}}},
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")

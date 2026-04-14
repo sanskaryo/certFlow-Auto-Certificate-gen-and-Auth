@@ -1,6 +1,6 @@
 export type Mode = 'single' | 'bulk' | 'csv';
 
-export type LogoPos = { x: number; y: number; size: number };
+export type LogoPos = { x: number; y: number; size: number; shape?: 'rectangle' | 'rounded' | 'circle' | 'oval' };
 
 /** Normalized layout: x,y are fractions 0–1; y is distance from top (0 = top edge, 1 = bottom). */
 export interface CertificateLayout {
@@ -173,7 +173,7 @@ export const initialState: StudioState = {
     aiPrompt: '',
     logoFile: null,
     logoPreviewUrl: null,
-    logoPos: { x: 0.03, y: 0.82, size: 0.25 },
+    logoPos: { x: 0.03, y: 0.82, size: 0.25, shape: 'rectangle' },
   },
   authority: {
     name: '',

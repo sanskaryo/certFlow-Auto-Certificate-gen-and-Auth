@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import PrimaryButton from './PrimaryButton';
-import { BrandingFields } from './types';
+import { BrandingFields, LogoPos } from './types';
 import LogoPositioner from '../../components/LogoPositioner';
 import { API_BASE } from '../../lib/api';
 
@@ -61,7 +61,7 @@ export default function BrandingStep({
 
   
 
-  async function handleLogoPositionSave(pos: { x: number; y: number; size: number }) {
+  async function handleLogoPositionSave(pos: LogoPos) {
     onBrandingChange({ logoPos: pos });
     try {
       await fetch(`${API_BASE}/events/${eventId}/logo-position`, {

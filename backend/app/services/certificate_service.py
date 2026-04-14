@@ -378,10 +378,12 @@ def _generate_standalone_pdf(
     rec = L["recipientName"]
     rx = float(rec["x"]) * width
     rec_scale = float(rec.get("scale", 1.0))
-    name_font_size = int(_fit_text(c, participant_name, width - 120, 36, font_bold) * rec_scale)
+    # Title-case the name so it always looks properly formatted
+    display_name = participant_name.title()
+    name_font_size = int(_fit_text(c, display_name, width - 120, 36, font_bold) * rec_scale)
     name_font_size = max(10, min(48, name_font_size))
     c.setFont(font_bold, name_font_size)
-    c.drawCentredString(rx, _baseline_from_top(float(rec["y"]), height, name_font_size), participant_name)
+    c.drawCentredString(rx, _baseline_from_top(float(rec["y"]), height, name_font_size), display_name)
 
     lines = _get_intelligent_wording(role, event_name)
 
@@ -393,7 +395,7 @@ def _generate_standalone_pdf(
     y0 = _baseline_from_top(float(bb["y"]), height, body_font)
     c.drawCentredString(bx, y0, lines[0])
 
-    line_gap = 40 * bb_scale
+    line_gap = 32 * bb_scale      # tighter gap so lines feel connected
     y_ptr = y0 - line_gap
     if lines[1]:
         c.drawCentredString(bx, y_ptr, lines[1])
@@ -402,24 +404,31 @@ def _generate_standalone_pdf(
     # Always show the organization name the user filled in
     c.drawCentredString(bx, y_ptr, f"organized by {organization}")
 
-    # ── QR code block — fixed bottom-left, no overlap ──────────────────────
-    qr_size = min(0.12 * width, 0.20 * height)   # ~85pt on A4-landscape
-    qr_margin = 28                                 # pts from edges
-    qr_x = qr_margin
-    qr_y = qr_margin + 18                         # room for cert ID below
+    # ── QR code block — fixed bottom-left, clear of border decorations ─────
+    qr_size = min(0.09 * width, 0.16 * height)    # ~70pt on A4-landscape
+    qr_margin = 52                                  # increased to clear border corners
+    qr_x = qr_margin + 8                           # a little extra right offset
+    qr_y = qr_margin                               # QR sits on the margin line
 
     c.drawImage(qr_path, qr_x, qr_y, width=qr_size, height=qr_size)
 
     c.setFont(font_main, 7)
-    # label above QR
-    c.drawCentredString(qr_x + qr_size / 2, qr_y + qr_size + 4, "Scan to verify")
-    # cert ID below QR
-    cert_id_label = f"ID: {cert_id[:20]}..." if len(cert_id) > 20 else f"ID: {cert_id}"
-    c.drawString(qr_x, qr_margin + 4, cert_id_label)
+    # cert ID above QR (won't clip into border corner decorations)
+    cert_id_label = f"ID: {cert_id[:22]}" if len(cert_id) > 22 else f"ID: {cert_id}"
+    c.drawString(qr_x, qr_y + qr_size + 4, cert_id_label)
+    # "Scan to verify" just above the cert ID
+    c.drawCentredString(qr_x + qr_size / 2, qr_y + qr_size + 14, "Scan to verify")
 
     # Issued on — bottom-right, separate from signature block
+    # Format date nicely if it is YYYY-MM-DD
+    try:
+        from datetime import datetime as _dt
+        _d = _dt.strptime(date_text, "%Y-%m-%d")
+        formatted_date = _d.strftime("%B %d, %Y")
+    except Exception:
+        formatted_date = date_text
     c.setFont(font_main, 11)
-    c.drawRightString(width - 28, qr_margin + 4, f"Issued on: {date_text}")
+    c.drawRightString(width - 36, qr_margin + 4, f"Issued on: {formatted_date}")
     
     # (traditional-elegant signature line is now part of the unified sig block below)
 
@@ -446,10 +455,26 @@ def _generate_standalone_pdf(
             # x/y are fractions (0-1). x=0 → left edge, y=1 → top edge (PDF coords: y=0 is bottom)
             x_frac = float(pos.get("x", 0.03))
             y_frac = float(pos.get("y", 0.82))
+            shape = pos.get("shape", "rectangle")
             logo_x = width * x_frac
             logo_y = height * y_frac - logo_h           # anchor top of logo at y_frac
+            
+            c.saveState()
+            if shape in ("circle", "rounded", "oval"):
+                p = c.beginPath()
+                if shape == "circle":
+                    radius = min(logo_w, logo_h) / 2
+                    p.circle(logo_x + logo_w / 2, logo_y + logo_h / 2, radius)
+                elif shape == "rounded":
+                    radius = min(logo_w, logo_h) * 0.15
+                    p.roundRect(logo_x, logo_y, logo_w, logo_h, radius)
+                elif shape == "oval":
+                    p.ellipse(logo_x, logo_y, logo_w, logo_h)
+                c.clipPath(p, stroke=0, fill=0)
+
             c.drawImage(logo_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
-            logger.info(f"Drew logo at ({logo_x:.0f},{logo_y:.0f}) size={logo_w:.0f}")
+            c.restoreState()
+            logger.info(f"Drew logo at ({logo_x:.0f},{logo_y:.0f}) size={logo_w:.0f} shape={shape}")
         except Exception as e:
             logger.error(f"Failed to draw logo from {logo_path}: {e}")
 
@@ -500,13 +525,13 @@ def _generate_standalone_pdf(
         if authority_name:
             fs = max(9, int(13 * float(L["authorityName"].get("scale", 1.0))))
             c.setFont(font_bold, fs)
-            c.drawCentredString(text_cx, text_y, authority_name)
+            c.drawCentredString(text_cx, text_y, authority_name.title())
             text_y -= fs + 4
 
         if authority_position:
             fs2 = max(8, int(11 * float(L["designation"].get("scale", 1.0))))
             c.setFont(font_main, fs2)
-            c.drawCentredString(text_cx, text_y, authority_position)
+            c.drawCentredString(text_cx, text_y, authority_position.title())
 
     c.save()
 

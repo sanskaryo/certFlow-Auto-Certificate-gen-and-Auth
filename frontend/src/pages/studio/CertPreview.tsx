@@ -300,7 +300,16 @@ export default function CertPreview({
         onPointerDown={e => startDrag('logo', e)}
       >
         {logoUrl ? (
-          <img src={logoUrl} alt="Logo" className="w-full h-full object-contain pointer-events-none" draggable={false} />
+          <img 
+            src={logoUrl} 
+            alt="Logo" 
+            className={`w-full h-full pointer-events-none ${
+              logoPos.shape === 'circle' ? 'rounded-full object-cover' :
+              logoPos.shape === 'rounded' ? 'rounded-[15%] object-cover' :
+              logoPos.shape === 'oval' ? 'rounded-[50%] object-cover' : 'object-contain'
+            }`} 
+            draggable={false} 
+          />
         ) : (
           <Placeholder />
         )}

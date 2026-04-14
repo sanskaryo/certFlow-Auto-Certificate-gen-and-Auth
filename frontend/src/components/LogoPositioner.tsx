@@ -5,7 +5,7 @@ const CERT_W = 297;
 const CERT_H = 210;
 const ASPECT = CERT_W / CERT_H; // ~1.414
 
-export type LogoPos = { x: number; y: number; size: number };
+export type LogoPos = { x: number; y: number; size: number; shape?: 'rectangle' | 'rounded' | 'circle' | 'oval' };
 
 interface Props {
   logoUrl: string | null;       // preview URL of uploaded logo
@@ -208,7 +208,11 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
             <img
               src={logoUrl}
               alt="logo"
-              className="w-full h-full object-contain pointer-events-none rounded"
+              className={`w-full h-full pointer-events-none ${
+                pos.shape === 'circle' ? 'rounded-full object-cover' :
+                pos.shape === 'rounded' ? 'rounded-[15%] object-cover' :
+                pos.shape === 'oval' ? 'rounded-[50%] object-cover' : 'object-contain'
+              }`}
               draggable={false}
             />
           ) : (
@@ -244,9 +248,30 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
             setPos(next);
             onChange(next);
           }}
-          className="flex-1 accent-teal-600"
+          className="flex-1 accent-prime-600"
         />
         <span className="text-xs text-gray-500 w-8 text-right">{Math.round(pos.size * 100)}%</span>
+      </div>
+
+      {/* Frame Shape selector */}
+      <div className="flex items-center gap-3">
+        <label className="text-xs font-semibold text-gray-500 whitespace-nowrap">Shape</label>
+        <div className="flex-1 flex gap-2">
+           {['rectangle', 'rounded', 'circle', 'oval'].map(s => (
+             <button
+                key={s}
+                type="button"
+                onClick={() => {
+                   const next: LogoPos = { ...pos, shape: s as any };
+                   setPos(next);
+                   onChange(next);
+                }}
+                className={`flex-1 py-1 text-xs capitalize rounded border ${pos.shape === s || (!pos.shape && s === 'rectangle') ? 'border-prime-500 text-prime-700 bg-prime-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+             >
+                {s}
+             </button>
+           ))}
+        </div>
       </div>
 
       {/* Save button */}
