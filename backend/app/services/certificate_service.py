@@ -334,12 +334,22 @@ def _generate_standalone_pdf(
     width, height = landscape(A4)
     L = _merge_certificate_layout(certificate_layout)
     style = dict(TEMPLATE_PRESETS.get(template_id, TEMPLATE_PRESETS["academic-classic"]))
-    
+
     theme = L.get("theme", {})
     if theme.get("bgTint"): style["bg"] = theme["bgTint"]
     if theme.get("titleColor"): style["title"] = theme["titleColor"]
     if theme.get("textColor"): style["text"] = theme["textColor"]
     if theme.get("accentColor"): style["accent"] = theme["accentColor"]
+
+    # ── PDF Metadata ────────────────────────────────────────────────────────
+    c.setTitle(f"Certificate — {participant_name.title()}")
+    c.setAuthor(authority_name or organization or "CertFlow")
+    c.setSubject(f"Certificate for {event_name}")
+    c.setCreator("CertFlow Certificate Generator")
+    c.setKeywords(["certificate", event_name, organization, participant_name])
+
+    # Safe margin — all decorative elements stay inside this
+    MARGIN = 48
 
     logger.info(f"Initializing PDF generation. template_id={template_id}, template_path={template_path}")
 
@@ -428,10 +438,23 @@ def _generate_standalone_pdf(
             c.circle(cx, cy, 18, fill=1, stroke=0)
 
     else:
-        # Default simple border
-        c.setStrokeColor(style.get("accent", "#9ca3af"))
-        c.setLineWidth(2)
-        c.rect(15, 15, width - 30, height - 30, fill=0, stroke=1)
+        # Premium multi-layer border for remaining templates
+        accent = style.get("accent", "#9ca3af")
+        title_col = style.get("title", "#1d4ed8")
+        # Outer thick border
+        c.setStrokeColor(title_col)
+        c.setLineWidth(4)
+        c.rect(MARGIN - 18, MARGIN - 18, width - (MARGIN - 18) * 2, height - (MARGIN - 18) * 2, fill=0, stroke=1)
+        # Inner thin border
+        c.setStrokeColor(accent)
+        c.setLineWidth(1)
+        c.rect(MARGIN - 10, MARGIN - 10, width - (MARGIN - 10) * 2, height - (MARGIN - 10) * 2, fill=0, stroke=1)
+        # Corner accent circles
+        c.setFillColor(accent)
+        r = 7
+        m = MARGIN - 14
+        for cx, cy in [(m, m), (width - m, m), (m, height - m), (width - m, height - m)]:
+            c.circle(cx, cy, r, fill=1, stroke=0)
 
     c.setFillColor(style["title"])
     if template_id in ("traditional-elegant", "academic-navy", "warm-appreciation"):
@@ -472,8 +495,20 @@ def _generate_standalone_pdf(
         font_main = t_font
         font_bold = t_font_bold
     
-    c.setFont(font_main, 18)
-    c.drawCentredString(width / 2, height - 180, "This certifies that")
+    # ── "This certifies that" with decorative flanking lines ────────────────
+    certifies_y = height - 175
+    certifies_text = "This certifies that"
+    c.setFont(font_main, 16)
+    c.setFillColor(style.get("text", "#374151"))
+    text_w = c.stringWidth(certifies_text, font_main, 16)
+    cx = width / 2
+    line_len = (width * 0.25)
+    line_y = certifies_y + 6
+    c.setStrokeColor(style.get("accent", "#9ca3af"))
+    c.setLineWidth(0.75)
+    c.line(cx - line_len - text_w / 2 - 12, line_y, cx - text_w / 2 - 10, line_y)
+    c.line(cx + text_w / 2 + 10, line_y, cx + line_len + text_w / 2 + 12, line_y)
+    c.drawCentredString(cx, certifies_y, certifies_text)
 
     rec = L["recipientName"]
     rx = float(rec["x"]) * width
@@ -491,9 +526,15 @@ def _generate_standalone_pdf(
 
     name_font_size = int(_fit_text(c, display_name, width - 120, 36, name_font) * rec_scale)
     name_font_size = max(10, min(48, name_font_size))
-    _draw_custom_text(
-        c, display_name, rx, _baseline_from_top(float(rec["y"]), height, name_font_size), font_bold, name_font_size, rec
-    )
+    name_y = _baseline_from_top(float(rec["y"]), height, name_font_size)
+    _draw_custom_text(c, display_name, rx, name_y, font_bold, name_font_size, rec)
+
+    # Accent underline beneath recipient name
+    name_w = min(c.stringWidth(display_name, name_font, name_font_size), width * 0.7)
+    ul_y = name_y - 6
+    c.setStrokeColor(style.get("accent", "#60a5fa"))
+    c.setLineWidth(2)
+    c.line(rx - name_w / 2, ul_y, rx + name_w / 2, ul_y)
 
     lines = _get_intelligent_wording(role, event_name)
 
@@ -511,13 +552,16 @@ def _generate_standalone_pdf(
     y0 = _baseline_from_top(float(bb["y"]), height, body_font)
     _draw_custom_text(c, lines[0], bx, y0, font_main, body_font, bb)
 
-    line_gap = 32 * bb_scale      # tighter gap so lines feel connected
+    line_gap = 30 * bb_scale
     y_ptr = y0 - line_gap
     if lines[1]:
         _draw_custom_text(c, lines[1], bx, y_ptr, font_main, body_font, bb)
         y_ptr -= line_gap
-    # Always show the organization name the user filled in
-    c.drawCentredString(bx, y_ptr, f"organized by {organization}")
+
+    # "organized by Org" — slightly smaller and muted
+    c.setFont(font_main, max(9, body_font - 2))
+    c.setFillColor(style.get("text", "#374151"))
+    c.drawCentredString(bx, y_ptr, f"organized by  {organization}")
 
     # ── QR code block — fixed bottom-left, clear of border decorations ─────
     qr_size = min(0.09 * width, 0.16 * height)    # ~70pt on A4-landscape
@@ -528,11 +572,13 @@ def _generate_standalone_pdf(
     c.drawImage(qr_path, qr_x, qr_y, width=qr_size, height=qr_size)
 
     c.setFont(font_main, 7)
-    # cert ID above QR (won't clip into border corner decorations)
-    cert_id_label = f"ID: {cert_id[:22]}" if len(cert_id) > 22 else f"ID: {cert_id}"
+    c.setFillColor(style.get("text", "#6b7280"))
+    # "Scan to verify" just above the QR
+    c.drawCentredString(qr_x + qr_size / 2, qr_y + qr_size + 13, "Scan to verify")
+    # cert ID in tiny monospace below label — truncated to fit
+    cert_id_label = f"{cert_id[:28]}" if len(cert_id) > 28 else cert_id
+    c.setFont("Courier", 6)
     c.drawString(qr_x, qr_y + qr_size + 4, cert_id_label)
-    # "Scan to verify" just above the cert ID
-    c.drawCentredString(qr_x + qr_size / 2, qr_y + qr_size + 14, "Scan to verify")
 
     # Issued on — bottom-right, separate from signature block
     # Format date nicely if it is YYYY-MM-DD
@@ -542,8 +588,9 @@ def _generate_standalone_pdf(
         formatted_date = _d.strftime("%B %d, %Y")
     except Exception:
         formatted_date = date_text
-    c.setFont(font_main, 11)
-    c.drawRightString(width - 36, qr_margin + 4, f"Issued on: {formatted_date}")
+    c.setFont(font_main, 10)
+    c.setFillColor(style.get("text", "#374151"))
+    c.drawRightString(width - MARGIN, qr_margin + 4, f"Issued on:  {formatted_date}")
     
     # (traditional-elegant signature line is now part of the unified sig block below)
 

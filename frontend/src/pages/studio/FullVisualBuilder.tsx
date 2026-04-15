@@ -31,8 +31,15 @@ export default function FullVisualBuilder({
   const [selectedElement, setSelectedElement] = useState<DragKey | null>(null);
   const [dragging, setDragging] = useState<DragKey | null>(null);
   const [resizing, setResizing] = useState<DragKey | null>(null);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [showGrid, setShowGrid] = useState(false);
+  const [lockedElements, setLockedElements] = useState<Set<string>>(new Set());
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragSnap = useRef<any>(null);
+
+  // Snap value to nearest grid step (5%)
+  const snap = (v: number, step = 0.05) =>
+    snapEnabled ? Math.round(v / step) * step : v;
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>('');
@@ -169,10 +176,14 @@ export default function FullVisualBuilder({
     const item = (s as any)[key];
     if (item) {
       patchLayout({
-        [key]: { ...item, x: Math.max(0, Math.min(1, item.x + dx)), y: Math.max(0, Math.min(1, item.y + dy)) }
+        [key]: {
+          ...item,
+          x: snap(Math.max(0, Math.min(1, item.x + dx))),
+          y: snap(Math.max(0, Math.min(1, item.y + dy))),
+        }
       } as any);
     }
-  }, [dragging, resizing, previewData, onLogoPosChange, patchLayout, toLocal]);
+  }, [dragging, resizing, previewData, onLogoPosChange, patchLayout, toLocal, snapEnabled]);
 
   const onPointerUp = useCallback(() => {
     setDragging(null);
@@ -190,9 +201,43 @@ export default function FullVisualBuilder({
     };
   }, [dragging, resizing, onPointerMove, onPointerUp]);
 
+  // Keyboard nudge — arrow keys move selected element by 1% (or 5% with Shift)
+  useEffect(() => {
+    if (!selectedElement) return;
+    const STEP = 0.01;
+    const handler = (e: KeyboardEvent) => {
+      if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) return;
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'SELECT') return;
+      e.preventDefault();
+      if (lockedElements.has(selectedElement)) return;
+      const step = e.shiftKey ? 0.05 : STEP;
+      const L = previewData?.certificateLayout;
+      if (!L || !previewData) return;
+
+      const applyXY = (obj: any, dx: number, dy: number) => ({
+        ...obj,
+        x: Math.max(0, Math.min(1, (obj.x ?? 0) + dx)),
+        y: Math.max(0, Math.min(1, (obj.y ?? 0) + dy)),
+      });
+      const dxMap: Record<string,number> = { ArrowLeft: -step, ArrowRight: step, ArrowUp: 0, ArrowDown: 0 };
+      const dyMap: Record<string,number> = { ArrowUp: -step, ArrowDown: step, ArrowLeft: 0, ArrowRight: 0 };
+      const dx = dxMap[e.key], dy = dyMap[e.key];
+
+      if (selectedElement === 'logo') {
+        onLogoPosChange(applyXY(previewData.logoPos, dx, dy));
+      } else {
+        const el = (L as any)[selectedElement];
+        if (el) patchLayout({ [selectedElement]: applyXY(el, dx, dy) } as any);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectedElement, lockedElements, previewData, onLogoPosChange, patchLayout]);
+
   const startDrag = (key: DragKey, e: React.PointerEvent) => {
     e.preventDefault();
-    e.stopPropagation();  // prevent bubbling to canvas wrapper which would clear selection
+    e.stopPropagation();
+    if (lockedElements.has(key)) { setSelectedElement(key); return; } // allow select but not drag
     setSelectedElement(key);
     const { nx, ny } = toLocal(e.clientX, e.clientY);
     
@@ -272,6 +317,17 @@ export default function FullVisualBuilder({
             border: '1px solid #e2e8f0',
           }}
         >
+          {/* Grid overlay */}
+          {showGrid && (
+            <div className="absolute inset-0 pointer-events-none z-50" style={{ opacity: 0.2 }}>
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div key={`v${i}`} className="absolute top-0 bottom-0 border-l border-blue-400" style={{ left: `${i * 5}%` }} />
+              ))}
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div key={`h${i}`} className="absolute left-0 right-0 border-t border-blue-400" style={{ top: `${i * 5}%` }} />
+              ))}
+            </div>
+          )}
           {previewData.logoUrl && (
             <div
               className={getElementStyle(selectedElement === 'logo')}
@@ -436,20 +492,69 @@ export default function FullVisualBuilder({
 
         </div>
         
-     <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">
-        <div className="p-5 border-b border-gray-100 bg-gray-50 flex flex-col gap-2 relative">
-            <h2 className="text-lg font-bold text-gray-800">Visual Builder</h2>
-            <p className="text-sm text-gray-500">{selectedElement ? 'Element Settings' : 'Global Settings'}</p>
+      <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">
+        {/* Toolbar row */}
+        <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+          <button
+            onClick={() => setShowGrid(g => !g)}
+            title="Toggle grid overlay"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              showGrid ? 'bg-blue-100 text-blue-700' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            Grid
+          </button>
+          <button
+            onClick={() => setSnapEnabled(s => !s)}
+            title="Toggle snap to grid"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              snapEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m0 14v1M4 12h1m14 0h1" /></svg>
+            Snap
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col gap-1">
+            <h2 className="text-base font-bold text-gray-800">Visual Builder</h2>
+            <p className="text-xs text-gray-400">{selectedElement ? `Editing · ${selectedElement}` : 'Click an element to edit'}</p>
         </div>
 
         {selectedElement ? (
-            <div className="p-5 space-y-6">
+            <div className="p-4 space-y-5">
+                {/* Element header with lock */}
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold tracking-wide text-blue-600 uppercase">
-                        Editing {selectedElement}
+                    <span className="text-xs font-bold tracking-widest text-blue-600 uppercase">
+                        {selectedElement}
                     </span>
-                    <button onClick={() => setSelectedElement(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setLockedElements(prev => {
+                          const next = new Set(prev);
+                          if (next.has(selectedElement)) next.delete(selectedElement);
+                          else next.add(selectedElement);
+                          return next;
+                        })}
+                        title={lockedElements.has(selectedElement) ? 'Unlock element' : 'Lock element'}
+                        className={`w-7 h-7 flex items-center justify-center rounded transition ${
+                          lockedElements.has(selectedElement) ? 'bg-amber-100 text-amber-600' : 'text-gray-400 hover:bg-gray-100'
+                        }`}
+                      >
+                        {lockedElements.has(selectedElement) ? (
+                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" /></svg>
+                        ) : (
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                        )}
+                      </button>
+                      <button onClick={() => setSelectedElement(null)} className="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:bg-gray-100">✕</button>
+                    </div>
                 </div>
+                {lockedElements.has(selectedElement) && (
+                  <p className="text-[11px] text-amber-600 bg-amber-50 rounded px-2 py-1">🔒 Element locked — unlock to drag or resize</p>
+                )}
+                <p className="text-[10px] text-gray-400">Use ← ↑ → ↓ arrow keys to nudge • Shift+Arrow for 5% jump</p>
 
                 <div className="space-y-4">
                     {['recipientName', 'bodyBlock', 'authorityName', 'designation', 'authorityName2', 'designation2'].includes(selectedElement) && (
