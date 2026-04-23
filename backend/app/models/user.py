@@ -23,3 +23,10 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class ApiKeyCreate(BaseModel):
+    name: str = Field(..., min_length=1)

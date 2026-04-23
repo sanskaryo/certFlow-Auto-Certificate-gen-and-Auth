@@ -14,9 +14,15 @@ interface FullVisualBuilderProps {
 
 type DragKey =
   | 'logo'
+  | 'logo2'
+  | 'logo3'
+  | 'watermark'
   | 'signature'
+  | 'signature2'
   | 'authorityName'
+  | 'authorityName2'
   | 'designation'
+  | 'designation2'
   | 'recipientName'
   | 'bodyBlock'
   | 'qr';
@@ -102,6 +108,7 @@ export default function FullVisualBuilder({
     const s = dragSnap.current;
     const dx = nx - s.nx0;
     const dy = ny - s.ny0;
+    const delta = dx; // Simple delta for resizing
 
     if (resizing) {
       if (['logo', 'logo2', 'logo3', 'watermark'].includes(resizing)) {
@@ -130,17 +137,19 @@ export default function FullVisualBuilder({
         });
       } else {
         // Text elements use scale
-        const item = s[resizing];
-        patchLayout({
-          [resizing]: { ...item, scale: Math.max(0.4, Math.min(3, item.scale + delta * 2)) }
-        });
+        const item = (s as any)[resizing];
+        if (item) {
+          patchLayout({
+            [resizing]: { ...item, scale: Math.max(0.4, Math.min(3, (item.scale || 1) + delta * 2)) }
+          });
+        }
       }
       return;
     }
 
-    if (['logo', 'logo2', 'logo3', 'watermark'].includes(dragging)) {
+    if (dragging && ['logo', 'logo2', 'logo3', 'watermark'].includes(dragging)) {
       const logoKey = dragging as 'logo' | 'logo2' | 'logo3' | 'watermark';
-      const logoState = logoKey === 'logo' ? s.logo : previewData.certificateLayout[logoKey] as LogoPos;
+      const logoState = logoKey === 'logo' ? (s as any).logo : (previewData.certificateLayout as any)[logoKey];
       if (logoState) {
           const newVal = {
             ...logoState,
@@ -153,9 +162,9 @@ export default function FullVisualBuilder({
       return;
     }
 
-    if (['signature', 'signature2'].includes(dragging)) {
+    if (dragging && ['signature', 'signature2'].includes(dragging)) {
       const sigKey = dragging as 'signature' | 'signature2';
-      const sig = sigKey === 'signature' ? s.signature : s.signature2;
+      const sig = sigKey === 'signature' ? (s as any).signature : (s as any).signature2;
       if (sig) {
         patchLayout({
           [sigKey]: { ...sig, x: Math.max(0, Math.min(1 - sig.w, sig.x + dx)), y: Math.max(0, Math.min(1 - sig.h, sig.y + dy)) }
@@ -246,10 +255,16 @@ export default function FullVisualBuilder({
     
     const snapMap: any = {
       logo: { logo: { ...previewData.logoPos } },
+      logo2: { logo2: { ...L.logo2 } },
+      logo3: { logo3: { ...L.logo3 } },
+      watermark: { watermark: { ...L.watermark } },
       signature: { signature: { ...L.signature } },
+      signature2: { signature2: { ...L.signature2 } },
       qr: { qr: { ...L.qr } },
       authorityName: { authorityName: { ...L.authorityName } },
+      authorityName2: { authorityName2: { ...L.authorityName2 } },
       designation: { designation: { ...L.designation } },
+      designation2: { designation2: { ...L.designation2 } },
       recipientName: { recipientName: { ...L.recipientName } },
       bodyBlock: { bodyBlock: { ...L.bodyBlock } }
     };
@@ -267,10 +282,16 @@ export default function FullVisualBuilder({
     
     const snapMap: any = {
       logo: { logo: { ...previewData.logoPos } },
+      logo2: { logo2: { ...L.logo2 } },
+      logo3: { logo3: { ...L.logo3 } },
+      watermark: { watermark: { ...L.watermark } },
       signature: { signature: { ...L.signature } },
+      signature2: { signature2: { ...L.signature2 } },
       qr: { qr: { ...L.qr } },
       authorityName: { authorityName: { ...L.authorityName } },
+      authorityName2: { authorityName2: { ...L.authorityName2 } },
       designation: { designation: { ...L.designation } },
+      designation2: { designation2: { ...L.designation2 } },
       recipientName: { recipientName: { ...L.recipientName } },
       bodyBlock: { bodyBlock: { ...L.bodyBlock } }
     };
@@ -389,18 +410,6 @@ export default function FullVisualBuilder({
             {selectedElement === 'bodyBlock' && <ResizeHandle onStart={e => startResize('bodyBlock', e)} />}
           </div>
 
-          <div
-            className={getElementStyle(selectedElement === 'signature')}
-            style={{
-              left: `${layout.signature.x * 100}%`,
-              top: `${layout.signature.y * 100}%`,
-              width: `${layout.signature.w * 100}%`,
-              height: `${layout.signature.h * 100}%`,
-            }}
-            onPointerDown={e => startDrag('signature', e)}
-          >
-            {previewData.signatureUrl ? (
-              <img src={previewData.signatureUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
           {['signature', 'signature2'].map(k => {
              const sigKey = k as 'signature' | 'signature2';
              const sig = layout[sigKey];
@@ -413,7 +422,7 @@ export default function FullVisualBuilder({
              const aDesigLayout = isSecondary ? layout.designation2 : layout.designation;
 
              return (
-                <div key={sigKey}>
+                <React.Fragment key={sigKey}>
                    {url && (
                     <div
                       className={getElementStyle(selectedElement === sigKey)}
@@ -470,7 +479,7 @@ export default function FullVisualBuilder({
                       <p className="text-xs tracking-wide" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aPosUrl}</p>
                     </div>
                   )}
-                </div>
+                </React.Fragment>
              );
           })}
 
@@ -487,10 +496,10 @@ export default function FullVisualBuilder({
                <span className="text-xs text-gray-400 font-bold">QR</span>
             </div>
             <p className="text-[10px] text-gray-500 text-center uppercase tracking-wider font-semibold">Scan to verify</p>
-            {selectedElement === 'qr' && <ResizeHandle onStart={e => startResize('qr', e)} />}
+          {selectedElement === 'qr' && <ResizeHandle onStart={e => startResize('qr', e)} />}
           </div>
-
         </div>
+      </div>
         
       <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">
         {/* Toolbar row */}
@@ -596,14 +605,14 @@ export default function FullVisualBuilder({
                         <div className="space-y-2 pt-4 border-t border-gray-100">
                            <label className="text-sm font-semibold text-gray-700">Shape</label>
                            <div className="flex gap-2">
-                              {['rectangle', 'rounded', 'circle', 'oval'].map(s => {
-                                 const currentShape = selectedElement === 'logo' ? previewData.logoPos.shape : (layout as any)[selectedElement]?.shape;
+                      {['rectangle', 'rounded', 'circle', 'oval'].map(s => {
+                                 const currentShape = selectedElement === 'logo' ? previewData.logoPos.shape : (layout as any)[selectedElement as string]?.shape;
                                  return (
                                      <button
                                         key={s} type="button"
                                         onClick={() => {
                                             if (selectedElement === 'logo') onLogoPosChange({ ...previewData.logoPos, shape: s as any });
-                                            else patchLayout({ [selectedElement]: { ...(layout as any)[selectedElement], shape: s as any } });
+                                            else patchLayout({ [selectedElement as string]: { ...(layout as any)[selectedElement as string], shape: s as any } });
                                         }}
                                         className={`flex-1 py-1 text-[11px] capitalize rounded ${currentShape === s || (!currentShape && s === 'rectangle') ? 'bg-blue-100 text-blue-700 font-bold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                      >

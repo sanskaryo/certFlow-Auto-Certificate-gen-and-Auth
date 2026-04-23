@@ -1,17 +1,18 @@
 import hashlib
 import os
-from datetime import datetime
-
+from datetime import datetime, timezone
+import logging
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-
 from app.core.config import settings
 from app.database import get_database
+from app.core.ratelimit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/verify", tags=["verification"])
-
 
 class OrgBranding(BaseModel):
     org_name: str | None = None
@@ -19,7 +20,6 @@ class OrgBranding(BaseModel):
     logo_url: str | None = None
     white_label: bool = False
     remove_branding: bool = False
-
 
 class CertificateResponse(BaseModel):
     id: str
@@ -36,7 +36,6 @@ class CertificateResponse(BaseModel):
     is_valid: bool
     branding: OrgBranding | None = None
 
-
 async def _track(cert_id: str, event_type: str, source: str = "verify"):
     db = get_database()
     await db.certificate_events.insert_one(
@@ -44,10 +43,9 @@ async def _track(cert_id: str, event_type: str, source: str = "verify"):
             "cert_id": cert_id,
             "event_type": event_type,
             "source": source,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         }
     )
-
 
 def _validate_hash(cert: dict, cert_id: str, event_name: str) -> bool:
     metadata = cert.get("metadata", {})
@@ -63,40 +61,39 @@ def _validate_hash(cert: dict, cert_id: str, event_name: str) -> bool:
     ).hexdigest()
     return cert.get("verification_hash") in {expected_hash_v2, expected_hash_v1}
 
-
 async def _build_response(cert: dict) -> CertificateResponse:
     db = get_database()
     cert_id = cert["id"]
-
-    event_name = cert.get("metadata", {}).get("event_name")
-    event = None
     event_id = cert.get("event_id")
+    
+    event = None
     if event_id and ObjectId.is_valid(event_id):
         event = await db.events.find_one({"_id": ObjectId(event_id)})
-    if not event_name and event:
-        event_name = event.get("name")
-    event_name = event_name or "Unknown Event"
-
+    
+    metadata = cert.get("metadata", {})
+    event_name = metadata.get("event_name") or (event.get("name") if event else "Unknown Event")
+    
     if not _validate_hash(cert, cert_id, event_name):
+        logger.warning(f"Integrity check failed for cert {cert_id}")
         raise HTTPException(status_code=400, detail="Certificate integrity check failed")
 
-    metadata = cert.get("metadata", {})
     organization = metadata.get("organization") or (event.get("organization") if event else None)
     issuer_name = event.get("authority_name") if event else None
     issuer_position = event.get("authority_position") if event else None
     has_signature = bool(event and event.get("signature_path"))
 
-    # Fetch issuer branding
+    # Fetch issuer branding with simplified lookup
     branding = None
-    if event:
-        issuer = await db.users.find_one({"_id": event.get("user_id")} if not isinstance(event.get("user_id"), str)
-                                         else {"id": event.get("user_id")})
-        if not issuer:
-            issuer = await db.users.find_one({"_id": ObjectId(event["user_id"])}) if ObjectId.is_valid(str(event.get("user_id", ""))) else None
+    if event and event.get("user_id"):
+        # Correctly lookup user by _id (which is how user_id is stored in events)
+        u_id = event.get("user_id")
+        issuer = await db.users.find_one({"_id": ObjectId(u_id)}) if ObjectId.is_valid(u_id) else None
+        
         if issuer and (issuer.get("white_label") or issuer.get("custom_domain")):
             logo_url = None
-            if event.get("logo_path"):
-                logo_url = f"/uploads/{event['logo_path'].split('uploads/')[-1]}" if "uploads/" in str(event.get("logo_path", "")) else None
+            if event.get("logo_path") and "uploads/" in str(event["logo_path"]):
+                logo_url = f"/uploads/{str(event['logo_path']).split('uploads/')[-1]}"
+            
             branding = OrgBranding(
                 org_name=issuer.get("org_name_override") or organization,
                 primary_color=issuer.get("primary_color"),
@@ -112,7 +109,7 @@ async def _build_response(cert: dict) -> CertificateResponse:
         organization=organization,
         role=metadata.get("role") or None,
         date_text=metadata.get("date_text") or None,
-        issued_at=cert["issued_at"],
+        issued_at=cert.get("issued_at", cert.get("created_at")),
         verification_hash=cert["verification_hash"],
         issuer_name=issuer_name,
         issuer_position=issuer_position,
@@ -121,17 +118,17 @@ async def _build_response(cert: dict) -> CertificateResponse:
         branding=branding,
     )
 
-
 @router.get("/public-stats")
-async def public_stats():
+@limiter.limit("60/minute")
+async def public_stats(request: Request):
     db = get_database()
     orgs_using = await db.users.count_documents({})
     certs_issued = await db.certificates.count_documents({})
     return {"orgs_using": orgs_using, "certs_issued": certs_issued}
 
-
 @router.get("/hash/{verification_hash}", response_model=CertificateResponse)
-async def verify_by_hash(verification_hash: str):
+@limiter.limit("30/minute")
+async def verify_by_hash(request: Request, verification_hash: str):
     db = get_database()
     cert = await db.certificates.find_one({"verification_hash": verification_hash})
     if not cert:
@@ -139,9 +136,9 @@ async def verify_by_hash(verification_hash: str):
     await _track(cert["id"], "verified", "hash_lookup")
     return await _build_response(cert)
 
-
 @router.get("/{cert_id}", response_model=CertificateResponse)
-async def verify_certificate(cert_id: str):
+@limiter.limit("30/minute")
+async def verify_certificate(request: Request, cert_id: str):
     db = get_database()
     cert = await db.certificates.find_one({"id": cert_id})
     if not cert:
@@ -149,34 +146,29 @@ async def verify_certificate(cert_id: str):
     await _track(cert_id, "verified", "id_lookup")
     return await _build_response(cert)
 
-
 @router.post("/{cert_id}/track/open")
-async def track_open(cert_id: str):
+@limiter.limit("10/minute")
+async def track_open(request: Request, cert_id: str):
     db = get_database()
     cert = await db.certificates.find_one({"id": cert_id})
-    if not cert:
-        raise HTTPException(status_code=404, detail="Certificate not found")
+    if not cert: raise HTTPException(status_code=404, detail="Not found")
     await _track(cert_id, "opened", "recipient")
     return {"message": "Open tracked"}
 
-
 @router.post("/{cert_id}/track/share")
-async def track_share(cert_id: str):
+@limiter.limit("10/minute")
+async def track_share(request: Request, cert_id: str):
     db = get_database()
     cert = await db.certificates.find_one({"id": cert_id})
-    if not cert:
-        raise HTTPException(status_code=404, detail="Certificate not found")
+    if not cert: raise HTTPException(status_code=404, detail="Not found")
     await _track(cert_id, "shared", "recipient")
     return {"message": "Share tracked"}
 
-
 @router.get("/{cert_id}/preview")
-async def preview_certificate_pdf(cert_id: str):
+@limiter.limit("20/minute")
+async def preview_certificate_pdf(request: Request, cert_id: str):
     db = get_database()
     cert = await db.certificates.find_one({"id": cert_id})
-    if not cert:
-        raise HTTPException(status_code=404, detail="Certificate not found")
-    file_path = cert.get("file_path")
-    if not file_path or not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Certificate file not found")
-    return FileResponse(file_path, media_type="application/pdf", content_disposition_type="inline")
+    if not cert or not cert.get("file_path") or not os.path.exists(cert["file_path"]):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(cert["file_path"], media_type="application/pdf", content_disposition_type="inline")

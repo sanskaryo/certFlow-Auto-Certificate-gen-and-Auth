@@ -1,7 +1,7 @@
 import hashlib
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 import logging
 
@@ -795,7 +795,7 @@ async def generate_single_manual_certificate(
             logo_position=logo_pos,
             certificate_layout=cert_layout,
         )
-        issued_at = datetime.utcnow()
+        issued_at = datetime.now(timezone.utc)
         if email:
             await ensure_profile_for_recipient(email, participant_name)
         await _save_certificate_record(

@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import PrimaryButton from './PrimaryButton';
-import { BrandingFields, LogoPos } from './types';
-import LogoPositioner from '../../components/LogoPositioner';
+import { BrandingFields } from './types';
 import { API_BASE } from '../../lib/api';
 
 interface Template {
@@ -89,19 +88,6 @@ export default function BrandingStep({
     }
   }
 
-  async function handleLogoPositionSave(pos: LogoPos) {
-    onBrandingChange({ logoPos: pos });
-    try {
-      await fetch(`${API_BASE}/events/${eventId}/logo-position`, {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify(pos),
-      });
-      onNotify('Logo position saved', 'success');
-    } catch {
-      onNotify('Failed to save logo position', 'error');
-    }
-  }
 
   async function handleGenerateAiTemplate() {
     if (!branding.aiPrompt.trim()) return;
@@ -121,7 +107,6 @@ export default function BrandingStep({
     }
   }
 
-  const activeTemplate = templates.find(t => t.id === branding.templateId);
 
   return (
     <div className="space-y-6">

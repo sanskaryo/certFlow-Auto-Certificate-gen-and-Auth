@@ -199,6 +199,7 @@ export interface PreviewData {
   date: string;
   authorityName: string;
   authorityPosition: string;
+  authority: AuthorityFields;
   logoUrl: string | null;
   logoPos: LogoPos;
   signatureUrl: string | null;

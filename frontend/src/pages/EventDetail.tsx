@@ -79,7 +79,7 @@ export default function EventDetail() {
           dispatch({ type: 'UPDATE_SINGLE', field: 'date_text', value: evtData.date_text || new Date().toISOString().split('T')[0] });
 
           // Pre-fill authority
-          dispatch({ type: 'UPDATE_AUTHORITY', patch: { name: evtData.authority_name || '', position: evtData.authority_position || '' } });
+          dispatch({ type: 'UPDATE_AUTHORITY', patch: { name: evtData.authority_name || '', position: evtData.authority_position || '', sigPreviewUrl: evtData.signature_path ? `${API}/${evtData.signature_path.replace(/\\/g, '/')}` : null } });
 
           // Pre-fill branding
           const logoPos = evtData.logo_position || { x: 0.03, y: 0.82, size: 0.25 };
@@ -134,6 +134,7 @@ export default function EventDetail() {
       date: state.single.date_text,
       authorityName: state.authority.name,
       authorityPosition: state.authority.position,
+      authority: state.authority,
       logoUrl,
       logoPos: state.branding.logoPos,
       signatureUrl,
@@ -404,7 +405,7 @@ export default function EventDetail() {
         <div>
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm text-[#0d9488] font-bold hover:underline mb-2"
+            className="inline-flex items-center gap-1.5 text-sm text-[#008080] font-bold hover:underline mb-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" />
@@ -440,7 +441,7 @@ export default function EventDetail() {
             ].map(s => (
               <div key={s.label} className="bg-gray-50/50 p-[12px_20px] rounded-[8px] border border-gray-100 flex flex-col items-center group hover:bg-white hover:shadow-md transition-all">
                   <p className="text-gray-400 text-[10px] uppercase font-black mb-1 group-hover:text-gray-500">{s.label}</p>
-                  <p className="text-2xl font-black text-[#0d9488] leading-none">{s.val || 0}</p>
+                  <p className="text-2xl font-black text-[#008080] leading-none">{s.val || 0}</p>
               </div>
             ))}
         </div>
@@ -455,7 +456,7 @@ export default function EventDetail() {
               onClick={() => setAppMode('wizard')}
               className={`flex-1 sm:flex-none px-8 py-3 rounded-xl text-sm font-black transition-all ${
                 appMode === 'wizard' 
-                  ? 'bg-[#0d9488] text-white shadow-lg' 
+                  ? 'bg-[#008080] text-white shadow-lg' 
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -465,7 +466,7 @@ export default function EventDetail() {
               onClick={() => setAppMode('visual_builder')}
               className={`flex-1 sm:flex-none px-8 py-3 rounded-xl text-sm font-black border transition-all ${
                 appMode === 'visual_builder' 
-                  ? 'bg-[#0d9488] text-white shadow-lg border-transparent ml-1.5' 
+                  ? 'bg-[#008080] text-white shadow-lg border-transparent ml-1.5' 
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 border-gray-200 ml-1.5'
               }`}
             >

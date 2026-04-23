@@ -137,7 +137,9 @@ export default function Verify() {
                 </div>
 
                 {loading && <p className="mt-6">Verifying...</p>}
-                {error && <p className="mt-6 text-red-600">{error}</                {data && (
+                {error && <p className="mt-6 text-red-600">{error}</p>}
+                
+                {data && (
                     <div className="mt-8 bg-white border border-gray-100 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden animate-slideUp">
                         {/* Status Banner */}
                         <div className={`px-6 py-4 flex items-center gap-3 border-b ${data.is_valid ? 'bg-emerald-50/50 border-emerald-100' : 'bg-amber-50/50 border-amber-100'}`}>
@@ -279,7 +281,7 @@ export default function Verify() {
                             )}
                         </div>
                     </div>
-                )}     )}
+                )}
             </div>
             <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${toast ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}>
                 <div className="bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-2xl shadow-2xl">

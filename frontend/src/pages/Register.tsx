@@ -1,26 +1,23 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_BASE } from '../lib/api';
+import { apiFetch } from '../lib/api';
+import { useToast } from '../context/ToastContext';
 
 export default function Register() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { showToast } = useToast();
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE}/auth/register`, {
+            await apiFetch('/auth/register', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({
                     name,
                     email,
@@ -29,133 +26,78 @@ export default function Register() {
                 }),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Registration failed');
-            }
-
-            navigate('/login', { state: { message: 'Account created! Please log in.' } });
+            showToast('Account established successfully!', 'success');
+            navigate('/login');
         } catch (err: any) {
-            setError(err.message || 'Registration failed');
+            showToast(err.message || 'Establishment failed', 'error');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="flex bg-gradient-to-br from-prime-50 via-white to-accent-50 items-center justify-center min-h-screen relative overflow-hidden px-4 py-8">
-            {/* Animated background blobs */}
-            <div className="absolute top-[10%] left-[5%] w-96 h-96 bg-accent-400/30 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
-            <div className="absolute top-[20%] right-[10%] w-96 h-96 bg-teal-400/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000" style={{ animationDelay: '2s' }}></div>
-            <div className="absolute bottom-[-10%] left-[15%] w-96 h-96 bg-prime-400/30 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000" style={{ animationDelay: '4s' }}></div>
+        <div className="flex items-center justify-center min-h-screen relative overflow-hidden px-4">
+            <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-teal-500/10 rounded-full blur-[120px] animate-pulse"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
 
-            <div className="glass w-full max-w-md z-10 rounded-3xl shadow-2xl border border-white/50 p-10 animate-slideUp">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-prime-500 to-accent-500 mb-4">
-                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+            <main className="glass-panel w-full max-w-lg rounded-[2.5rem] shadow-2xl border-white/60 p-12 lg:p-16 animate-in fade-in zoom-in-95 duration-500">
+                <div className="text-center mb-12">
+                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl gradient-brand mb-6 shadow-xl shadow-teal-500/20 -rotate-3 hover:rotate-0 transition-transform duration-300">
+                        <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                         </svg>
                     </div>
-                    <h1 className="text-4xl font-bold gradient-text mb-2">Create Account</h1>
-                    <p className="text-gray-600 font-medium">Join CertFlow and start generating!</p>
+                    <h1 className="text-4xl font-black gradient-text tracking-tighter mb-3 font-display">Establishment</h1>
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Create Your Organization Profile</p>
                 </div>
 
-                {/* Error Message */}
-                {error && (
-                    <div className="animate-slideDown bg-red-50 text-red-600 p-4 rounded-xl mb-6 text-sm text-center border border-red-200 flex items-center justify-center gap-2">
-                        <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"></path>
-                        </svg>
-                        {error}
-                    </div>
-                )}
-
-                {/* Register Form */}
-                <form onSubmit={handleRegister} className="space-y-5">
-                    <div className="animate-slideUp" style={{ animationDelay: '0.1s' }}>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2.5">Organization Name</label>
+                <form onSubmit={handleRegister} className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">Organization Name</label>
                         <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 focus:border-transparent outline-none transition-all duration-200 placeholder-gray-400"
-                            placeholder="Your organization name"
-                            required
-                            disabled={loading}
+                            type="text" required value={name} onChange={(e) => setName(e.target.value)}
+                            className="w-full h-14" placeholder="Acme Corporation" disabled={loading}
                         />
                     </div>
 
-                    <div className="animate-slideUp" style={{ animationDelay: '0.2s' }}>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2.5">Email Address</label>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">Admin Email</label>
                         <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 focus:border-transparent outline-none transition-all duration-200 placeholder-gray-400"
-                            placeholder="you@example.com"
-                            required
-                            disabled={loading}
+                            type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                            className="w-full h-14" placeholder="admin@acme.com" disabled={loading}
                         />
                     </div>
 
-                    <div className="animate-slideUp" style={{ animationDelay: '0.3s' }}>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2.5">Password</label>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-slate-400 px-1">Access Credentials</label>
                         <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-white border border-gray-200 focus:ring-2 focus:ring-prime-500 focus:border-transparent outline-none transition-all duration-200 placeholder-gray-400"
-                            placeholder="••••••••"
-                            required
-                            minLength={6}
-                            disabled={loading}
+                            type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
+                            className="w-full h-14" placeholder="••••••••" disabled={loading} minLength={6}
                         />
-                        <p className="text-xs text-gray-500 mt-1.5">Must be at least 6 characters</p>
                     </div>
 
                     <button
-                        type="submit"
-                        disabled={loading}
-                        className="animate-slideUp w-full bg-gradient-to-r from-prime-600 to-accent-600 hover:from-prime-700 hover:to-accent-700 disabled:from-gray-400 disabled:to-gray-400 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg shadow-prime-500/30 disabled:shadow-none flex items-center justify-center gap-2 mt-8"
-                        style={{ animationDelay: '0.4s' }}
+                        type="submit" disabled={loading}
+                        className="w-full gradient-brand text-white font-black h-16 rounded-2xl shadow-xl shadow-teal-500/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-3 mt-8"
                     >
-                        {loading ? (
-                            <>
-                                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 2v4m0 12v4M4.22 4.22l2.83 2.83m7.9 7.9l2.83 2.83M2 12h4m12 0h4m-17.78 7.78l2.83-2.83m7.9-7.9l2.83-2.83"></path>
-                                </svg>
-                                Creating account...
-                            </>
-                        ) : (
-                            <>
-                                Create Account
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
-                                </svg>
-                            </>
+                        {loading ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : (
+                          <>
+                            <span>Register Authority</span>
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                          </>
                         )}
                     </button>
                 </form>
 
-                {/* Divider */}
-                <div className="relative my-8">
-                    <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-gray-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                        <span className="px-2 bg-white text-gray-500">Already registered?</span>
-                    </div>
-                </div>
-
-                {/* Login Link */}
-                <p className="text-center text-sm text-gray-600">
-                    Already have an account?{' '}
-                    <Link to="/login" className="font-semibold text-prime-600 hover:text-prime-700 transition-colors duration-200">
-                        Sign in →
+                <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col items-center gap-4">
+                    <p className="text-slate-500 font-medium text-sm">Already part of the ecosystem?</p>
+                    <Link to="/login" className="text-teal-600 font-black hover:text-teal-700 underline-offset-4 hover:underline decoration-2 transition-all">
+                        Authenticate Existing Profile
                     </Link>
-                </p>
-            </div>
+                </div>
+            </main>
         </div>
     );
 }
