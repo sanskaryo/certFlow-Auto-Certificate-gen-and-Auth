@@ -400,8 +400,7 @@ export default function FullVisualBuilder({
             onPointerDown={e => startDrag('signature', e)}
           >
             {previewData.signatureUrl ? (
-              <img src={previewData.signatureUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
-          {['signature', 'signature2'].map(k => {
+              <img src={previewData.signatureUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />            ) : null}          {['signature', 'signature2'].map(k => {
              const sigKey = k as 'signature' | 'signature2';
              const sig = layout[sigKey];
              if (!sig || sig.hidden) return null;
@@ -489,9 +488,10 @@ export default function FullVisualBuilder({
             <p className="text-[10px] text-gray-500 text-center uppercase tracking-wider font-semibold">Scan to verify</p>
             {selectedElement === 'qr' && <ResizeHandle onStart={e => startResize('qr', e)} />}
           </div>
-
         </div>
-        
+      </div>
+      </div>
+
       <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">
         {/* Toolbar row */}
         <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
