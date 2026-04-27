@@ -70,10 +70,6 @@ export default function AuthorityStep({
   async function handleSaveAuthority() {
     setSaving(true);
     try {
-      const payload: any = {
-        authority_name: authority.name,
-        authority_position: authority.position,
-      };
       // Send secondary directly if possible or we wait for an expanded save endpoint.
       // Wait, let's just save additional_signatures.name2 and additional_signatures.position2 
       // The current PATCH /authority only accepts authority_name and authority_position.

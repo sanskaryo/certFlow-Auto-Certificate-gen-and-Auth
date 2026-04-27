@@ -20,6 +20,43 @@ const API = API_BASE;
 
 type Template = { id: string; name: string; bg: string; title: string };
 type Toast = { msg: string; type: 'success' | 'error' | 'info' } | null;
+type StudioDraft = {
+  mode: 'single' | 'bulk' | 'csv';
+  step: number;
+  single: {
+    participant_name: string;
+    email: string;
+    role: string;
+    organization: string;
+    date_text: string;
+  };
+  bulk: {
+    rawText: string;
+    parsedLines: Array<{ raw: string; name: string; email: string; role: string; valid: boolean; error: string | null }>;
+  };
+  csv: {
+    parsedRows: CsvRow[];
+  };
+  branding: {
+    templateId: string;
+    aiPrompt: string;
+    logoPreviewUrl: string | null;
+    logoPos: { x: number; y: number; size: number; shape?: 'rectangle' | 'rounded' | 'circle' | 'oval' };
+    logo2Url?: string | null;
+    logo3Url?: string | null;
+    watermarkUrl?: string | null;
+  };
+  authority: {
+    name: string;
+    position: string;
+    sigPreviewUrl: string | null;
+    name2?: string;
+    position2?: string;
+    sigPreviewUrl2?: string | null;
+  };
+  certificateLayout: ReturnType<typeof mergeCertificateLayout>;
+  appMode?: 'wizard' | 'visual_builder';
+};
 
 const STEP_LABELS = ['Mode', 'Template & Branding', 'Recipient Details', 'Authority', 'Confirm & Generate'];
 
@@ -36,11 +73,115 @@ export default function EventDetail() {
   const [eventStats, setEventStats] = useState<any>(null);
   const [progress, setProgress] = useState<{ total: number; success: number; failed: number } | null>(null);
   const [appMode, setAppMode] = useState<'wizard' | 'visual_builder'>('wizard');
+  const [didApplyDraft, setDidApplyDraft] = useState(false);
+
+  const draftKey = useMemo(() => (id ? `certflow:studio-draft:${id}` : ''), [id]);
+
+  useEffect(() => {
+    setDidApplyDraft(false);
+  }, [draftKey]);
 
   const authHeaders = useMemo<Record<string, string>>(
     () => (token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>)),
     [token]
   );
+
+  const isBlobUrl = (value?: string | null) => !!value && value.startsWith('blob:');
+
+  const buildDraft = useCallback((): StudioDraft => {
+    const cleanBrandingUrl = (u?: string | null) => (isBlobUrl(u) ? null : (u || null));
+    const cleanSigUrl = (u?: string | null) => (isBlobUrl(u) ? null : (u || null));
+
+    return {
+      mode: state.mode,
+      step: state.step,
+      single: { ...state.single },
+      bulk: {
+        rawText: state.bulk.rawText,
+        parsedLines: state.bulk.parsedLines.map((l) => ({ ...l })),
+      },
+      csv: {
+        parsedRows: state.csv.parsedRows.map((r) => ({ ...r })),
+      },
+      branding: {
+        templateId: state.branding.templateId,
+        aiPrompt: state.branding.aiPrompt,
+        logoPreviewUrl: cleanBrandingUrl(state.branding.logoPreviewUrl),
+        logoPos: { ...state.branding.logoPos },
+        logo2Url: cleanBrandingUrl(state.branding.logo2Url),
+        logo3Url: cleanBrandingUrl(state.branding.logo3Url),
+        watermarkUrl: cleanBrandingUrl(state.branding.watermarkUrl),
+      },
+      authority: {
+        name: state.authority.name,
+        position: state.authority.position,
+        sigPreviewUrl: cleanSigUrl(state.authority.sigPreviewUrl),
+        name2: state.authority.name2,
+        position2: state.authority.position2,
+        sigPreviewUrl2: cleanSigUrl(state.authority.sigPreviewUrl2),
+      },
+      certificateLayout: mergeCertificateLayout(state.certificateLayout),
+      appMode,
+    };
+  }, [state, appMode]);
+
+  const applyDraft = useCallback((draft: Partial<StudioDraft>) => {
+    if (!draft) return;
+    if (draft.mode) dispatch({ type: 'SET_MODE', mode: draft.mode });
+    if (typeof draft.step === 'number') {
+      const boundedStep = Math.max(0, Math.min(STEP_LABELS.length - 1, draft.step));
+      dispatch({ type: 'SET_STEP', step: boundedStep });
+    }
+
+    if (draft.single) {
+      (Object.entries(draft.single) as Array<[keyof StudioDraft['single'], string]>).forEach(([field, value]) => {
+        dispatch({ type: 'UPDATE_SINGLE', field, value: value ?? '' });
+      });
+    }
+
+    if (draft.bulk?.rawText !== undefined) {
+      dispatch({ type: 'UPDATE_BULK_TEXT', text: draft.bulk.rawText || '' });
+    }
+
+    if (draft.csv?.parsedRows) {
+      dispatch({ type: 'SET_CSV_FILE', file: null, rows: draft.csv.parsedRows });
+    }
+
+    if (draft.branding) {
+      dispatch({
+        type: 'UPDATE_BRANDING',
+        patch: {
+          templateId: draft.branding.templateId || '',
+          aiPrompt: draft.branding.aiPrompt || '',
+          logoPreviewUrl: draft.branding.logoPreviewUrl || null,
+          logoPos: draft.branding.logoPos || { x: 0.03, y: 0.82, size: 0.25 },
+          logo2Url: draft.branding.logo2Url || null,
+          logo3Url: draft.branding.logo3Url || null,
+          watermarkUrl: draft.branding.watermarkUrl || null,
+        },
+      });
+    }
+
+    if (draft.authority) {
+      dispatch({
+        type: 'UPDATE_AUTHORITY',
+        patch: {
+          name: draft.authority.name || '',
+          position: draft.authority.position || '',
+          sigPreviewUrl: draft.authority.sigPreviewUrl || null,
+          name2: draft.authority.name2 || '',
+          position2: draft.authority.position2 || '',
+          sigPreviewUrl2: draft.authority.sigPreviewUrl2 || null,
+        },
+      });
+    }
+
+    if (draft.certificateLayout) {
+      dispatch({ type: 'UPDATE_CERTIFICATE_LAYOUT', patch: mergeCertificateLayout(draft.certificateLayout) });
+    }
+
+    if (draft.appMode) setAppMode(draft.appMode);
+  }, [dispatch]);
 
   // ── Toast helper ──────────────────────────────────────────────────────────
   const notify = useCallback((msg: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -90,6 +231,17 @@ export default function EventDetail() {
             patch: mergeCertificateLayout(evtData.certificate_layout),
           });
 
+          if (!didApplyDraft && draftKey) {
+            try {
+              const raw = localStorage.getItem(draftKey);
+              if (raw) applyDraft(JSON.parse(raw));
+            } catch {
+              // Ignore invalid draft payload
+            } finally {
+              setDidApplyDraft(true);
+            }
+          }
+
           // Handle custom/ai template
           if (evtData.template_id === 'ai-generated' || evtData.template_path) {
             const customId = evtData.template_id || 'ai-generated';
@@ -110,7 +262,16 @@ export default function EventDetail() {
         console.error('Failed to fetch event data', e);
       }
     })();
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, draftKey, didApplyDraft, applyDraft]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(buildDraft()));
+    } catch {
+      // Ignore storage quota/unavailable errors
+    }
+  }, [draftKey, buildDraft]);
 
   // ── Derive PreviewData from state ─────────────────────────────────────────
   const previewData = useMemo<PreviewData>(() => {
@@ -134,6 +295,11 @@ export default function EventDetail() {
       date: state.single.date_text,
       authorityName: state.authority.name,
       authorityPosition: state.authority.position,
+      authority: {
+        name2: state.authority.name2,
+        position2: state.authority.position2,
+        sigPreviewUrl2: state.authority.sigPreviewUrl2,
+      },
       logoUrl,
       logoPos: state.branding.logoPos,
       signatureUrl,

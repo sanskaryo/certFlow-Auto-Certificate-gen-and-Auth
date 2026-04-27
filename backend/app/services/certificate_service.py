@@ -329,6 +329,7 @@ def _generate_standalone_pdf(
     template_path: str = None,
     logo_position: dict = None,
     certificate_layout: dict | None = None,
+    event: dict | None = None,
 ):
     c = canvas.Canvas(output_path, pagesize=landscape(A4))
     width, height = landscape(A4)
@@ -794,6 +795,7 @@ async def generate_single_manual_certificate(
             template_path=pass_template_path,
             logo_position=logo_pos,
             certificate_layout=cert_layout,
+            event=event,
         )
         issued_at = datetime.utcnow()
         if email:

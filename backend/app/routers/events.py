@@ -426,49 +426,58 @@ async def upload_participants(event_id: str, file: UploadFile = File(...), curre
 @router.post("/{event_id}/generate/manual")
 async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequest, current_user: Any = Depends(get_current_user)):
     await _require_event_access(event_id, current_user, {"issuer"})
-    result = await generate_single_manual_certificate(
-        event_id=event_id,
-        participant_name=payload.participant_name.strip(),
-        event_name=payload.event_name.strip(),
-        organization=payload.organization.strip(),
-        date_text=payload.date_text.strip(),
-        template_id=payload.template_id.strip(),
-        role=payload.role.strip(),
-        email=payload.email.strip() if payload.email else "",
-    )
-    await _track_cert_event(result["certificate_id"], "issued", "manual")
-    return {"message": "Certificate generated", **result}
+    try:
+        result = await generate_single_manual_certificate(
+            event_id=event_id,
+            participant_name=payload.participant_name.strip(),
+            event_name=payload.event_name.strip(),
+            organization=payload.organization.strip(),
+            date_text=payload.date_text.strip(),
+            template_id=payload.template_id.strip(),
+            role=payload.role.strip(),
+            email=payload.email.strip() if payload.email else "",
+        )
+        await _track_cert_event(result["certificate_id"], "issued", "manual")
+        return {"message": "Certificate generated", **result}
+    except Exception as exc:
+        logger.exception("Manual generation failed for event %s", event_id)
+        raise HTTPException(status_code=500, detail=f"Manual generation failed: {str(exc)}")
 
 
 @router.post("/{event_id}/generate/manual-bulk")
 async def generate_manual_bulk(event_id: str, payload: ManualBulkGenerateRequest, current_user: Any = Depends(get_current_user)):
     event, _ = await _require_event_access(event_id, current_user, {"issuer"})
+    try:
+        if not payload.participants:
+            raise HTTPException(status_code=400, detail="At least one participant entry is required")
 
-    if not payload.participants:
-        raise HTTPException(status_code=400, detail="At least one participant entry is required")
+        # Fill in missing fields from the stored event document
+        event_name = payload.event_name.strip() or event.get("name", "Event")
+        organization = payload.organization.strip() or event.get("organization", "Organization")
+        date_text = payload.date_text.strip() or event.get("date_text", datetime.utcnow().strftime("%Y-%m-%d"))
+        template_id = (payload.template_id or event.get("template_id") or "classic-blue").strip()
 
-    # Fill in missing fields from the stored event document
-    event_name = payload.event_name.strip() or event.get("name", "Event")
-    organization = payload.organization.strip() or event.get("organization", "Organization")
-    date_text = payload.date_text.strip() or event.get("date_text", datetime.utcnow().strftime("%Y-%m-%d"))
-    template_id = (payload.template_id or event.get("template_id") or "classic-blue").strip()
+        results = []
+        for p in payload.participants:
+            generated = await generate_single_manual_certificate(
+                event_id=event_id,
+                participant_name=p.name.strip(),
+                event_name=event_name,
+                organization=organization,
+                date_text=date_text,
+                template_id=template_id,
+                role=p.role.strip() if p.role else "",
+                email=p.email.strip() if p.email else "",
+            )
+            await _track_cert_event(generated["certificate_id"], "issued", "manual-bulk")
+            results.append(generated)
 
-    results = []
-    for p in payload.participants:
-        generated = await generate_single_manual_certificate(
-            event_id=event_id,
-            participant_name=p.name.strip(),
-            event_name=event_name,
-            organization=organization,
-            date_text=date_text,
-            template_id=template_id,
-            role=p.role.strip() if p.role else "",
-            email=p.email.strip() if p.email else "",
-        )
-        await _track_cert_event(generated["certificate_id"], "issued", "manual-bulk")
-        results.append(generated)
-
-    return {"message": f"Generated {len(results)} certificates", "certificates": results}
+        return {"message": f"Generated {len(results)} certificates", "certificates": results}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Manual bulk generation failed for event %s", event_id)
+        raise HTTPException(status_code=500, detail=f"Manual bulk generation failed: {str(exc)}")
 
 
 @router.post("/{event_id}/generate/api")

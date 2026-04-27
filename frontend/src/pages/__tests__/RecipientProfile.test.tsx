@@ -1,9 +1,9 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { describe, it, expect } from 'vitest';
+
+
 import * as fc from 'fast-check';
 
-// â”€â”€â”€ Pure helpers extracted for testing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Pure helpers extracted for testing ──────────────────────────────────────
 
 const mapCert = (c: any) => ({
   ...c,
@@ -42,7 +42,7 @@ const filterCerts = (certs: any[], query: string) =>
     `${c.event_name} ${c.organization} ${c.role}`.toLowerCase().includes(query.toLowerCase())
   );
 
-// â”€â”€â”€ Arbitraries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Arbitraries ─────────────────────────────────────────────────────────────
 
 const arbNonEmptyString = fc.string({ minLength: 1, maxLength: 40 });
 
@@ -70,12 +70,12 @@ const arbApiCert = fc.record({
   verification_hash: fc.string({ minLength: 8, maxLength: 64 }),
 });
 
-// â”€â”€â”€ Tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe('RecipientProfile â€” pure function properties', () => {
+describe('RecipientProfile — pure function properties', () => {
 
   // Feature: recipient-profile-page, Property 1: Cert field mapping preserves identity
-  it('P1: mapCert maps idâ†’cert_id and issued_atâ†’issued_date, preserving other fields', () => {
+  it('P1: mapCert maps id→cert_id and issued_at→issued_date, preserving other fields', () => {
     fc.assert(fc.property(arbApiCert, (c) => {
       const mapped = mapCert(c);
       expect(mapped.cert_id).toBe(c.id);
@@ -138,9 +138,9 @@ describe('RecipientProfile â€” pure function properties', () => {
 
 });
 
-// â”€â”€â”€ Unit tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Unit tests ───────────────────────────────────────────────────────────────
 
-describe('RecipientProfile â€” unit tests', () => {
+describe('RecipientProfile — unit tests', () => {
 
   it('mapCert: cert_id already present is not overwritten', () => {
     const c = { cert_id: 'existing', id: 'other', issued_date: 'x', issued_at: 'y', event_name: 'E', organization: 'O', role: 'R', date_text: '', verification_hash: 'h', participant_name: 'P' };

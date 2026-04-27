@@ -14,9 +14,15 @@ interface FullVisualBuilderProps {
 
 type DragKey =
   | 'logo'
+  | 'logo2'
+  | 'logo3'
+  | 'watermark'
   | 'signature'
+  | 'signature2'
   | 'authorityName'
+  | 'authorityName2'
   | 'designation'
+  | 'designation2'
   | 'recipientName'
   | 'bodyBlock'
   | 'qr';
@@ -102,6 +108,7 @@ export default function FullVisualBuilder({
     const s = dragSnap.current;
     const dx = nx - s.nx0;
     const dy = ny - s.ny0;
+    const delta = (dx + dy) / 2;
 
     if (resizing) {
       if (['logo', 'logo2', 'logo3', 'watermark'].includes(resizing)) {
@@ -138,7 +145,7 @@ export default function FullVisualBuilder({
       return;
     }
 
-    if (['logo', 'logo2', 'logo3', 'watermark'].includes(dragging)) {
+    if (dragging && ['logo', 'logo2', 'logo3', 'watermark'].includes(dragging)) {
       const logoKey = dragging as 'logo' | 'logo2' | 'logo3' | 'watermark';
       const logoState = logoKey === 'logo' ? s.logo : previewData.certificateLayout[logoKey] as LogoPos;
       if (logoState) {
@@ -153,7 +160,7 @@ export default function FullVisualBuilder({
       return;
     }
 
-    if (['signature', 'signature2'].includes(dragging)) {
+    if (dragging && ['signature', 'signature2'].includes(dragging)) {
       const sigKey = dragging as 'signature' | 'signature2';
       const sig = sigKey === 'signature' ? s.signature : s.signature2;
       if (sig) {
@@ -246,10 +253,16 @@ export default function FullVisualBuilder({
     
     const snapMap: any = {
       logo: { logo: { ...previewData.logoPos } },
+      logo2: { logo2: L.logo2 ? { ...L.logo2 } : undefined },
+      logo3: { logo3: L.logo3 ? { ...L.logo3 } : undefined },
+      watermark: { watermark: L.watermark ? { ...L.watermark } : undefined },
       signature: { signature: { ...L.signature } },
+      signature2: { signature2: L.signature2 ? { ...L.signature2 } : undefined },
       qr: { qr: { ...L.qr } },
       authorityName: { authorityName: { ...L.authorityName } },
+      authorityName2: { authorityName2: L.authorityName2 ? { ...L.authorityName2 } : undefined },
       designation: { designation: { ...L.designation } },
+      designation2: { designation2: L.designation2 ? { ...L.designation2 } : undefined },
       recipientName: { recipientName: { ...L.recipientName } },
       bodyBlock: { bodyBlock: { ...L.bodyBlock } }
     };
@@ -267,10 +280,16 @@ export default function FullVisualBuilder({
     
     const snapMap: any = {
       logo: { logo: { ...previewData.logoPos } },
+      logo2: { logo2: L.logo2 ? { ...L.logo2 } : undefined },
+      logo3: { logo3: L.logo3 ? { ...L.logo3 } : undefined },
+      watermark: { watermark: L.watermark ? { ...L.watermark } : undefined },
       signature: { signature: { ...L.signature } },
+      signature2: { signature2: L.signature2 ? { ...L.signature2 } : undefined },
       qr: { qr: { ...L.qr } },
       authorityName: { authorityName: { ...L.authorityName } },
+      authorityName2: { authorityName2: L.authorityName2 ? { ...L.authorityName2 } : undefined },
       designation: { designation: { ...L.designation } },
+      designation2: { designation2: L.designation2 ? { ...L.designation2 } : undefined },
       recipientName: { recipientName: { ...L.recipientName } },
       bodyBlock: { bodyBlock: { ...L.bodyBlock } }
     };
@@ -389,88 +408,77 @@ export default function FullVisualBuilder({
             {selectedElement === 'bodyBlock' && <ResizeHandle onStart={e => startResize('bodyBlock', e)} />}
           </div>
 
-          <div
-            className={getElementStyle(selectedElement === 'signature')}
-            style={{
-              left: `${layout.signature.x * 100}%`,
-              top: `${layout.signature.y * 100}%`,
-              width: `${layout.signature.w * 100}%`,
-              height: `${layout.signature.h * 100}%`,
-            }}
-            onPointerDown={e => startDrag('signature', e)}
-          >
-            {previewData.signatureUrl ? (
-              <img src={previewData.signatureUrl} alt="Signature" className="w-full h-full object-contain pointer-events-none" />            ) : null}          {['signature', 'signature2'].map(k => {
-             const sigKey = k as 'signature' | 'signature2';
-             const sig = layout[sigKey];
-             if (!sig || sig.hidden) return null;
-             const isSecondary = sigKey === 'signature2';
-             const url = isSecondary ? previewData.authority.sigPreviewUrl2 : previewData.signatureUrl;
-             const aName = isSecondary ? previewData.authority.name2 : previewData.authorityName;
-             const aPosUrl = isSecondary ? previewData.authority.position2 : previewData.authorityPosition;
-             const aNameLayout = isSecondary ? layout.authorityName2 : layout.authorityName;
-             const aDesigLayout = isSecondary ? layout.designation2 : layout.designation;
+          {(['signature', 'signature2'] as const).map((sigKey) => {
+            const sig = layout[sigKey];
+            if (!sig || sig.hidden) return null;
 
-             return (
-                <div key={sigKey}>
-                   {url && (
-                    <div
-                      className={getElementStyle(selectedElement === sigKey)}
-                      style={{
-                        left: `${sig.x * 100}%`,
-                        top: `${(1 - sig.y) * 100}%`,
-                        width: `${sig.w * 100}%`,
-                        height: `${sig.h * 100}%`,
-                        transform: 'translateY(-100%)',
-                      }}
-                      onPointerDown={e => startDrag(sigKey, e)}
-                    >
-                      <img src={url} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
-                      {selectedElement === sigKey && <ResizeHandle onStart={e => startResize(sigKey, e)} />}
-                    </div>
-                  )}
+            const isSecondary = sigKey === 'signature2';
+            const url = isSecondary ? previewData.authority?.sigPreviewUrl2 || null : previewData.signatureUrl;
+            const aName = isSecondary ? previewData.authority?.name2 : previewData.authorityName;
+            const aPosUrl = isSecondary ? previewData.authority?.position2 : previewData.authorityPosition;
+            const aNameLayout = isSecondary ? layout.authorityName2 : layout.authorityName;
+            const aDesigLayout = isSecondary ? layout.designation2 : layout.designation;
 
-                  {aName && aNameLayout && (
-                    <div
-                      className={`${getElementStyle(selectedElement === (isSecondary ? 'authorityName2' : 'authorityName'))} text-center flex flex-col items-center justify-center`}
-                      style={{
-                        left: `${aNameLayout.x * 100}%`,
-                        top: `${aNameLayout.y * 100}%`,
-                        transform: `translate(-50%, -50%) scale(${aNameLayout.scale})`,
-                        width: '30%',
-                        color: aNameLayout.color || layout.theme?.textColor || '#4b5563',
-                        fontFamily: aNameLayout.fontFamily || 'inherit',
-                        fontWeight: aNameLayout.fontWeight || 'bold',
-                        letterSpacing: `${aNameLayout.letterSpacing || 0}px`,
-                        textTransform: aNameLayout.textTransform || 'none',
-                      }}
-                      onPointerDown={e => startDrag(isSecondary ? 'authorityName2' : 'authorityName', e)}
-                    >
-                      <p className="text-sm" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aName}</p>
-                    </div>
-                  )}
+            return (
+              <div key={sigKey}>
+                {url && (
+                  <div
+                    className={getElementStyle(selectedElement === sigKey)}
+                    style={{
+                      left: `${sig.x * 100}%`,
+                      top: `${(1 - sig.y) * 100}%`,
+                      width: `${sig.w * 100}%`,
+                      height: `${sig.h * 100}%`,
+                      transform: 'translateY(-100%)',
+                    }}
+                    onPointerDown={e => startDrag(sigKey, e)}
+                  >
+                    <img src={url} alt="Signature" className="w-full h-full object-contain pointer-events-none" />
+                    {selectedElement === sigKey && <ResizeHandle onStart={e => startResize(sigKey, e)} />}
+                  </div>
+                )}
 
-                  {aPosUrl && aDesigLayout && (
-                    <div
-                      className={`${getElementStyle(selectedElement === (isSecondary ? 'designation2' : 'designation'))} text-center flex flex-col items-center justify-center`}
-                      style={{
-                        left: `${aDesigLayout.x * 100}%`,
-                        top: `${aDesigLayout.y * 100}%`,
-                        transform: `translate(-50%, -50%) scale(${aDesigLayout.scale})`,
-                        width: '30%',
-                        color: aDesigLayout.color || layout.theme?.textColor || '#6b7280',
-                        fontFamily: aDesigLayout.fontFamily || 'inherit',
-                        fontWeight: aDesigLayout.fontWeight || 'normal',
-                        letterSpacing: `${aDesigLayout.letterSpacing || 0}px`,
-                        textTransform: aDesigLayout.textTransform || 'none',
-                      }}
-                      onPointerDown={e => startDrag(isSecondary ? 'designation2' : 'designation', e)}
-                    >
-                      <p className="text-xs tracking-wide" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aPosUrl}</p>
-                    </div>
-                  )}
-                </div>
-             );
+                {aName && aNameLayout && (
+                  <div
+                    className={`${getElementStyle(selectedElement === (isSecondary ? 'authorityName2' : 'authorityName'))} text-center flex flex-col items-center justify-center`}
+                    style={{
+                      left: `${aNameLayout.x * 100}%`,
+                      top: `${aNameLayout.y * 100}%`,
+                      transform: `translate(-50%, -50%) scale(${aNameLayout.scale})`,
+                      width: '30%',
+                      color: aNameLayout.color || layout.theme?.textColor || '#4b5563',
+                      fontFamily: aNameLayout.fontFamily || 'inherit',
+                      fontWeight: aNameLayout.fontWeight || 'bold',
+                      letterSpacing: `${aNameLayout.letterSpacing || 0}px`,
+                      textTransform: aNameLayout.textTransform || 'none',
+                    }}
+                    onPointerDown={e => startDrag(isSecondary ? 'authorityName2' : 'authorityName', e)}
+                  >
+                    <p className="text-sm" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aName}</p>
+                  </div>
+                )}
+
+                {aPosUrl && aDesigLayout && (
+                  <div
+                    className={`${getElementStyle(selectedElement === (isSecondary ? 'designation2' : 'designation'))} text-center flex flex-col items-center justify-center`}
+                    style={{
+                      left: `${aDesigLayout.x * 100}%`,
+                      top: `${aDesigLayout.y * 100}%`,
+                      transform: `translate(-50%, -50%) scale(${aDesigLayout.scale})`,
+                      width: '30%',
+                      color: aDesigLayout.color || layout.theme?.textColor || '#6b7280',
+                      fontFamily: aDesigLayout.fontFamily || 'inherit',
+                      fontWeight: aDesigLayout.fontWeight || 'normal',
+                      letterSpacing: `${aDesigLayout.letterSpacing || 0}px`,
+                      textTransform: aDesigLayout.textTransform || 'none',
+                    }}
+                    onPointerDown={e => startDrag(isSecondary ? 'designation2' : 'designation', e)}
+                  >
+                    <p className="text-xs tracking-wide" style={{ color: 'inherit', fontWeight: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit' }}>{aPosUrl}</p>
+                  </div>
+                )}
+              </div>
+            );
           })}
 
           <div
@@ -489,7 +497,6 @@ export default function FullVisualBuilder({
             {selectedElement === 'qr' && <ResizeHandle onStart={e => startResize('qr', e)} />}
           </div>
         </div>
-      </div>
       </div>
 
       <div className="w-80 bg-white border-l border-gray-200 flex flex-col items-stretch overflow-y-auto">

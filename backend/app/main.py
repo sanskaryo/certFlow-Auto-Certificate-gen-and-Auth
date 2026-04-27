@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import connect_to_mongo, close_mongo_connection
 from app.routers import auth, events, profiles, verification
 from app.routers import settings as settings_router
-from app.routers import analytics
 from app.middleware.custom_domain import CustomDomainMiddleware
 
 @asynccontextmanager
@@ -15,17 +15,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CertFlow API", lifespan=lifespan)
 
+
+def _allowed_origins() -> list[str]:
+    raw = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+    if raw:
+        parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        if parsed:
+            return parsed
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+app.add_middleware(CustomDomainMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For production, configure appropriately
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(CustomDomainMiddleware)
 
 from fastapi.staticfiles import StaticFiles
-import os
 
 app.include_router(auth.router)
 app.include_router(events.router)

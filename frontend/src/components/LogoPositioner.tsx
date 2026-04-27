@@ -65,7 +65,6 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragging || !dragStart.current) return;
     const { w, h } = canvasSize();
-    const { logoW } = toPixels(pos, w, h);
     const dx = e.clientX - dragStart.current.mx;
     const dy = e.clientY - dragStart.current.my;
     const newPx = dragStart.current.ox + dx;
@@ -103,7 +102,6 @@ export default function LogoPositioner({ logoUrl, initial, onChange, onSave, tem
     if (!dragging || !dragStart.current) return;
     const t = e.touches[0];
     const { w, h } = canvasSize();
-    const { logoW } = toPixels(pos, w, h);
     const dx = t.clientX - dragStart.current.mx;
     const dy = t.clientY - dragStart.current.my;
     const newPx = dragStart.current.ox + dx;
