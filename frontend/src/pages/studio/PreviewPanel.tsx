@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import type { PreviewData, ChecklistItem } from './types';
+import type { PreviewData, ChecklistItem, CertificateLayout, LogoPos } from './types';
 import CertPreview from './CertPreview';
 import FieldChecklist from './FieldChecklist';
 
@@ -7,9 +7,11 @@ interface PreviewPanelProps {
   data: PreviewData;
   eventData: any;
   currentStep: number;
+  onLayoutPatch?: (patch: Partial<CertificateLayout>) => void;
+  onLogoPosChange?: (pos: LogoPos) => void;
 }
 
-export default function PreviewPanel({ data, currentStep }: PreviewPanelProps) {
+export default function PreviewPanel({ data, currentStep, onLayoutPatch, onLogoPosChange }: PreviewPanelProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const checklistItems: ChecklistItem[] = [
@@ -61,7 +63,13 @@ export default function PreviewPanel({ data, currentStep }: PreviewPanelProps) {
           className="relative overflow-hidden rounded-xl border border-gray-100 shadow-sm"
           style={{ height: previewHeight }}
         >
-          <CertPreview data={data} scale={previewScale} />
+          <CertPreview 
+            data={data} 
+            scale={previewScale} 
+            interactive={true} 
+            onLayoutPatch={onLayoutPatch} 
+            onLogoPosChange={onLogoPosChange} 
+          />
         </div>
 
         {/* Open full preview button */}

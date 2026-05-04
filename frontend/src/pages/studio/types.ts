@@ -206,8 +206,12 @@ export interface PreviewData {
   };
   logoUrl: string | null;
   logoPos: LogoPos;
+  logo2Url?: string | null;
+  logo3Url?: string | null;
+  watermarkUrl?: string | null;
   signatureUrl: string | null;
   templateId: string;
+  templateUrl?: string | null;
   certificateLayout: CertificateLayout;
 }
 

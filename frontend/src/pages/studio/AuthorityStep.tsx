@@ -2,25 +2,30 @@ import { useRef, useState } from 'react';
 import FormSection from './FormSection';
 import InlineValidator from './InlineValidator';
 import PrimaryButton from './PrimaryButton';
-import { AuthorityFields, ValidationErrors } from './types';
+import SignaturePositioner from '../../components/SignaturePositioner';
+import { AuthorityFields, ValidationErrors, CertificateLayout } from './types';
 import { API_BASE } from '../../lib/api';
 
 interface AuthorityStepProps {
   authority: AuthorityFields;
+  certificateLayout: CertificateLayout;
   errors: ValidationErrors;
   eventId: string;
   token: string | null;
   onAuthorityChange: (patch: Partial<AuthorityFields>) => void;
+  onLayoutPatch: (patch: Partial<CertificateLayout>) => void;
   onNotify: (msg: string, type: 'success' | 'error' | 'info') => void;
   onNext: () => void;
 }
 
 export default function AuthorityStep({
   authority,
+  certificateLayout,
   errors,
   eventId,
   token,
   onAuthorityChange,
+  onLayoutPatch,
   onNotify,
   onNext,
 }: AuthorityStepProps) {
@@ -154,6 +159,19 @@ export default function AuthorityStep({
                 />
               </div>
             )}
+            <details className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg border border-gray-100">
+               <summary className="px-3 py-2 cursor-pointer font-semibold hover:bg-gray-100 list-none flex justify-between outline-none">
+                  Adjust Primary Signature Position & Size <span className="text-gray-400">▼</span>
+               </summary>
+               <div className="p-4 border-t border-gray-100">
+                  <SignaturePositioner
+                    sigUrl={authority.sigPreviewUrl}
+                    initial={certificateLayout.signature}
+                    onChange={pos => onLayoutPatch({ signature: pos })}
+                    onSave={pos => onLayoutPatch({ signature: pos })}
+                  />
+               </div>
+            </details>
           </div>
         </div>
       </FormSection>
@@ -219,6 +237,19 @@ export default function AuthorityStep({
                   />
                 </div>
               )}
+              <details className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg border border-gray-100">
+                 <summary className="px-3 py-2 cursor-pointer font-semibold hover:bg-gray-100 list-none flex justify-between outline-none">
+                    Adjust Secondary Signature Position & Size <span className="text-gray-400">▼</span>
+                 </summary>
+                 <div className="p-4 border-t border-gray-100">
+                    <SignaturePositioner
+                      sigUrl={authority.sigPreviewUrl2 || null}
+                      initial={certificateLayout.signature2 || { x: 0.1, y: 0.66, w: 0.24, h: 0.12 }}
+                      onChange={pos => onLayoutPatch({ signature2: pos })}
+                      onSave={pos => onLayoutPatch({ signature2: pos })}
+                    />
+                 </div>
+              </details>
             </div>
          </div>
       </FormSection>

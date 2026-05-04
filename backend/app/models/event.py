@@ -20,9 +20,11 @@ class EventCreate(EventBase):
 class EventInDB(EventBase):
     id: str
     user_id: str
+    organization_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class EventOut(EventBase):
     id: str
     user_id: str
+    organization_id: Optional[str] = None
     created_at: datetime

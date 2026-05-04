@@ -287,6 +287,34 @@ export default function EventDetail() {
       ? `${API}/${eventData.signature_path.replace(/\\/g, '/')}`
       : null;
 
+    const logo2Url = state.branding.logo2Url
+      ? state.branding.logo2Url
+      : eventData?.additional_logos?.logo2
+      ? `${API}/${eventData.additional_logos.logo2.replace(/\\/g, '/')}`
+      : null;
+
+    const logo3Url = state.branding.logo3Url
+      ? state.branding.logo3Url
+      : eventData?.additional_logos?.logo3
+      ? `${API}/${eventData.additional_logos.logo3.replace(/\\/g, '/')}`
+      : null;
+
+    const watermarkUrl = state.branding.watermarkUrl
+      ? state.branding.watermarkUrl
+      : eventData?.additional_logos?.watermark
+      ? `${API}/${eventData.additional_logos.watermark.replace(/\\/g, '/')}`
+      : null;
+
+    const sigPreviewUrl2 = state.authority.sigPreviewUrl2
+      ? state.authority.sigPreviewUrl2
+      : eventData?.additional_signatures?.signature_path2
+      ? `${API}/${eventData.additional_signatures.signature_path2.replace(/\\/g, '/')}`
+      : null;
+
+    const templateUrl = eventData?.template_path
+      ? `${API}/${eventData.template_path.replace(/\\/g, '/')}`
+      : null;
+
     return {
       name: state.single.participant_name || (state.mode !== 'single' ? 'Multiple Recipients' : ''),
       role: state.single.role,
@@ -298,12 +326,16 @@ export default function EventDetail() {
       authority: {
         name2: state.authority.name2,
         position2: state.authority.position2,
-        sigPreviewUrl2: state.authority.sigPreviewUrl2,
+        sigPreviewUrl2,
       },
       logoUrl,
       logoPos: state.branding.logoPos,
+      logo2Url,
+      logo3Url,
+      watermarkUrl,
       signatureUrl,
       templateId: state.branding.templateId,
+      templateUrl,
       certificateLayout: state.certificateLayout,
     };
   }, [state, eventData]);
@@ -505,10 +537,12 @@ export default function EventDetail() {
         return (
           <BrandingStep
             branding={state.branding}
+            certificateLayout={state.certificateLayout}
             templates={templates}
             eventId={id!}
             token={token}
             onBrandingChange={patch => dispatch({ type: 'UPDATE_BRANDING', patch })}
+            onLayoutPatch={patch => dispatch({ type: 'UPDATE_CERTIFICATE_LAYOUT', patch })}
             onNotify={notify}
             onNext={validateAndAdvance}
           />
@@ -534,10 +568,12 @@ export default function EventDetail() {
         return (
           <AuthorityStep
             authority={state.authority}
+            certificateLayout={state.certificateLayout}
             errors={state.errors}
             eventId={id!}
             token={token}
             onAuthorityChange={patch => dispatch({ type: 'UPDATE_AUTHORITY', patch })}
+            onLayoutPatch={patch => dispatch({ type: 'UPDATE_CERTIFICATE_LAYOUT', patch })}
             onNotify={notify}
             onNext={validateAndAdvance}
           />
@@ -704,7 +740,13 @@ export default function EventDetail() {
               {/* Right: preview panel */}
               <div className="relative">
                 {previewData && (
-                  <PreviewPanel data={previewData} eventData={eventData} currentStep={state.step} />
+                  <PreviewPanel 
+                    data={previewData} 
+                    eventData={eventData} 
+                    currentStep={state.step} 
+                    onLayoutPatch={patch => dispatch({ type: 'UPDATE_CERTIFICATE_LAYOUT', patch })}
+                    onLogoPosChange={logoPos => dispatch({ type: 'UPDATE_BRANDING', patch: { logoPos } })}
+                  />
                 )}
               </div>
             </div>

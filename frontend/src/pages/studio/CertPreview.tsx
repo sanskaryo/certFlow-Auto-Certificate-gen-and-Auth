@@ -53,9 +53,15 @@ export default function CertPreview({
     date,
     authorityName,
     authorityPosition,
+    authority,
     logoUrl,
     logoPos,
+    logo2Url,
+    logo3Url,
+    watermarkUrl,
     signatureUrl,
+    templateId,
+    templateUrl,
     certificateLayout: layout,
   } = data;
 

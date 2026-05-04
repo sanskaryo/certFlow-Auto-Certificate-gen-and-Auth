@@ -54,6 +54,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 async def get_me(current_user: Any = Depends(get_current_user)) -> Any:
     return current_user
 
+@router.get("/my-organization")
+async def get_my_organization(current_user: Any = Depends(get_current_user)) -> Any:
+    db = get_database()
+    org_id = current_user.get("organization_id")
+    if not org_id or not ObjectId.is_valid(org_id):
+        return None
+    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    if org:
+        org["id"] = str(org["_id"])
+        return org
+    return None
 
 @router.post("/register", response_model=UserOut)
 async def register(user_in: UserCreate) -> Any:
@@ -77,9 +88,36 @@ async def register(user_in: UserCreate) -> Any:
         local = str(user_dict["email"]).split("@")[0]
         user_dict["username"] = await _unique_username(db, local)
 
+    # Automatically create a default free organization for the new user
+    import datetime
+    org_doc = {
+        "name": f"{user_dict.get('name', 'User')}'s Organization",
+        "plan": "free",
+        "max_certs": 100,
+        "certs_issued": 0,
+        "owner_user_id": None, # Will set after user creation
+        "created_at": datetime.datetime.utcnow()
+    }
+    org_res = await db.organizations.insert_one(org_doc)
+    org_id = str(org_res.inserted_id)
+
+    user_dict["organization_id"] = org_id
+    if user_dict.get("role") == "admin":
+        user_dict["role"] = "user" # Ensure default role is user unless specified by superadmin later
+
     result = await db.users.insert_one(user_dict)
-    user_dict["id"] = str(result.inserted_id)
+    user_id = str(result.inserted_id)
+    user_dict["id"] = user_id
+    
+    # Update org with owner id
+    await db.organizations.update_one({"_id": org_res.inserted_id}, {"$set": {"owner_user_id": user_id}})
+
     return user_dict
+
+async def get_superadmin_user(current_user: Any = Depends(get_current_user)) -> Any:
+    if current_user.get("role") != "superadmin":
+        raise HTTPException(status_code=403, detail="Superadmin access required")
+    return current_user
 
 
 @router.post("/login", response_model=Token)

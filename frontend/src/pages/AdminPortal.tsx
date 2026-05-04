@@ -10,9 +10,11 @@ export default function AdminPortal() {
     const [events, setEvents] = useState<any[]>([]);
     const [failedEmails, setFailedEmails] = useState<any[]>([]);
     const [healthStats, setHealthStats] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [userSearch, setUserSearch] = useState('');
+    const [editingOrg, setEditingOrg] = useState<any>(null);
     const token = localStorage.getItem('token');
 
     useEffect(() => {
@@ -27,7 +29,8 @@ export default function AdminPortal() {
                 fetchUsers(),
                 fetchEvents(),
                 fetchFailedEmails(),
-                fetchHealthStats()
+                fetchHealthStats(),
+                fetchOrganizations()
             ]);
         } catch (e) {
             setError('Error loading some admin data.');
@@ -62,6 +65,26 @@ export default function AdminPortal() {
     const fetchHealthStats = async () => {
         const res = await fetch(`${API}/admin/health-stats`, { headers });
         if (res.ok) setHealthStats(await res.json());
+    };
+
+    const fetchOrganizations = async () => {
+        const res = await fetch(`${API}/admin/organizations`, { headers });
+        if (res.ok) setOrganizations(await res.json());
+    };
+
+    const updateOrg = async (e: any) => {
+        e.preventDefault();
+        const res = await fetch(`${API}/admin/organizations/${editingOrg.id}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ plan: editingOrg.plan, max_certs: Number(editingOrg.max_certs) })
+        });
+        if (res.ok) {
+            setEditingOrg(null);
+            fetchOrganizations();
+        } else {
+            alert('Failed to update organization');
+        }
     };
 
     const toggleUserStatus = async (id: string, currentStatus: boolean) => {
@@ -251,6 +274,45 @@ export default function AdminPortal() {
                         </div>
                     </div>
 
+                    {/* SECTION 5 — Organizations table */}
+                    <div className="space-y-4 pt-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-2xl font-bold text-gray-900">Organizations & Quotas</h3>
+                        </div>
+                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-gray-50/50 text-gray-500 font-semibold uppercase text-xs">
+                                    <tr>
+                                        <th className="px-6 py-4">Name</th>
+                                        <th className="px-6 py-4">Plan</th>
+                                        <th className="px-6 py-4">Certs Issued</th>
+                                        <th className="px-6 py-4">Max Certs</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {organizations.map(org => (
+                                        <tr key={org.id} className="hover:bg-gray-50/30">
+                                            <td className="px-6 py-4 font-bold text-gray-900">{org.name}</td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${org.plan === 'premium' ? 'bg-purple-100 text-purple-800' : org.plan === 'pro' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                    {org.plan}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 font-mono text-gray-600">{org.certs_issued}</td>
+                                            <td className="px-6 py-4 font-mono text-gray-600">{org.max_certs}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button onClick={() => setEditingOrg(org)} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
+                                                    Edit
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     {/* SECTION 3 — Failed email jobs */}
                     {failedEmails.length > 0 && (
                         <div id="failed-emails" className="space-y-4 pt-4">
@@ -289,6 +351,46 @@ export default function AdminPortal() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Organization Edit Modal */}
+                    {editingOrg && (
+                        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-xl">
+                                <h3 className="text-xl font-bold mb-4">Edit Organization</h3>
+                                <form onSubmit={updateOrg} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Name (Read-only)</label>
+                                        <input type="text" disabled value={editingOrg.name} className="w-full border border-gray-200 rounded-xl px-4 py-2 bg-gray-50" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
+                                        <select 
+                                            value={editingOrg.plan} 
+                                            onChange={e => setEditingOrg({...editingOrg, plan: e.target.value})}
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-prime-500 outline-none"
+                                        >
+                                            <option value="free">Free</option>
+                                            <option value="pro">Pro</option>
+                                            <option value="premium">Premium</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Max Certificates</label>
+                                        <input 
+                                            type="number" 
+                                            value={editingOrg.max_certs} 
+                                            onChange={e => setEditingOrg({...editingOrg, max_certs: e.target.value})}
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-prime-500 outline-none" 
+                                        />
+                                    </div>
+                                    <div className="flex gap-3 justify-end mt-6">
+                                        <button type="button" onClick={() => setEditingOrg(null)} className="px-4 py-2 rounded-xl text-gray-600 hover:bg-gray-100 font-semibold">Cancel</button>
+                                        <button type="submit" className="px-4 py-2 rounded-xl bg-prime-600 text-white hover:bg-prime-700 font-semibold shadow-sm">Save Changes</button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
                     )}

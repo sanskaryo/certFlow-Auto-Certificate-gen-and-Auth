@@ -14,12 +14,28 @@ function EventList() {
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [stats, setStats] = useState<any>(null);
+    const [myOrg, setMyOrg] = useState<any>(null);
     const token = localStorage.getItem('token');
 
     useEffect(() => {
         fetchEvents();
         fetchStats();
+        fetchMyOrg();
     }, [token]);
+
+    const fetchMyOrg = async () => {
+        try {
+            const response = await fetch(`${API_BASE}/auth/my-organization`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setMyOrg(data);
+            }
+        } catch (err) {
+            console.error('Error fetching org', err);
+        }
+    };
 
     const fetchEvents = async () => {
         console.log('[Dashboard] Fetching events...');
@@ -139,10 +155,15 @@ function EventList() {
                         <p className="text-gray-500 text-sm font-semibold mb-1">Views</p>
                         <p className="text-3xl font-bold text-blue-600">{stats.total_opened || 0}</p>
                     </div>
-                    <div className="bg-white/70 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center">
-                        <p className="text-gray-500 text-sm font-semibold mb-1">Verifications</p>
-                        <p className="text-3xl font-bold text-purple-600">{stats.total_verified || 0}</p>
-                    </div>
+                    {myOrg && (
+                        <div className="bg-white/70 backdrop-blur-sm p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center">
+                            <p className="text-gray-500 text-sm font-semibold mb-1">Plan Quota ({myOrg.plan})</p>
+                            <p className="text-3xl font-bold text-purple-600">{myOrg.certs_issued} / {myOrg.max_certs}</p>
+                            {myOrg.certs_issued >= myOrg.max_certs && (
+                                <p className="text-xs text-red-500 font-bold mt-2">Quota Exceeded!</p>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 

@@ -132,6 +132,35 @@ async def _track_cert_event(cert_id: str, event_type: str, source: str = "app"):
         }
     )
 
+async def _check_and_increment_quota(db, event_id: str, count: int = 1):
+    event = await db.events.find_one({"_id": ObjectId(event_id)})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    user_id = event.get("user_id")
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    org_id = user.get("organization_id") if user else None
+    
+    if not org_id or not ObjectId.is_valid(org_id):
+        # Fallback if user has no org (legacy data)
+        return True
+        
+    org = await db.organizations.find_one({"_id": ObjectId(org_id)})
+    if not org:
+        return True
+        
+    if org.get("certs_issued", 0) + count > org.get("max_certs", 100):
+        raise HTTPException(
+            status_code=402, 
+            detail=f"Certificate generation quota exceeded. Your plan allows {org.get('max_certs')} certificates."
+        )
+        
+    await db.organizations.update_one(
+        {"_id": ObjectId(org_id)}, 
+        {"$inc": {"certs_issued": count}}
+    )
+    return True
+
 
 @router.get("/templates")
 async def list_templates():
@@ -171,6 +200,7 @@ async def create_event(event_in: EventCreate, current_user: Any = Depends(get_cu
     db = get_database()
     event_dict = event_in.model_dump()
     event_dict["user_id"] = str(current_user.get("_id"))
+    event_dict["organization_id"] = current_user.get("organization_id")
     event_dict["created_at"] = datetime.utcnow()
 
     if event_dict.get("description"):
@@ -426,6 +456,8 @@ async def upload_participants(event_id: str, file: UploadFile = File(...), curre
 @router.post("/{event_id}/generate/manual")
 async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequest, current_user: Any = Depends(get_current_user)):
     await _require_event_access(event_id, current_user, {"issuer"})
+    db = get_database()
+    await _check_and_increment_quota(db, event_id, 1)
     try:
         result = await generate_single_manual_certificate(
             event_id=event_id,
@@ -447,9 +479,12 @@ async def generate_manual_certificate(event_id: str, payload: ManualGenerateRequ
 @router.post("/{event_id}/generate/manual-bulk")
 async def generate_manual_bulk(event_id: str, payload: ManualBulkGenerateRequest, current_user: Any = Depends(get_current_user)):
     event, _ = await _require_event_access(event_id, current_user, {"issuer"})
+    db = get_database()
     try:
         if not payload.participants:
             raise HTTPException(status_code=400, detail="At least one participant entry is required")
+
+        await _check_and_increment_quota(db, event_id, len(payload.participants))
 
         # Fill in missing fields from the stored event document
         event_name = payload.event_name.strip() or event.get("name", "Event")
@@ -490,6 +525,8 @@ async def generate_via_api(event_id: str, payload: APIIssueRequest, x_api_key: s
     key_doc = await db.api_keys.find_one({"event_id": event_id, "key_hash": key_hash, "is_active": True})
     if not key_doc:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+    await _check_and_increment_quota(db, event_id, 1)
 
     result = await generate_single_manual_certificate(
         event_id=event_id,
@@ -564,6 +601,12 @@ async def generate_certificates(event_id: str, background_tasks: BackgroundTasks
     event, _ = await _require_event_access(event_id, current_user, {"issuer"})
     if "template_path" not in event:
         raise HTTPException(status_code=400, detail="Please upload a template first")
+        
+    db = get_database()
+    pending_count = await db.participants.count_documents({"event_id": event_id, "status": "pending"})
+    if pending_count > 0:
+        await _check_and_increment_quota(db, event_id, pending_count)
+        
     background_tasks.add_task(process_certificate_generation, event_id)
     return {"message": "Certificate generation started in background"}
 

@@ -5,6 +5,7 @@ from bson import ObjectId
 from pydantic import BaseModel
 from app.database import get_database
 from app.routers.auth import get_current_user
+from app.models.organization import OrganizationOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -126,3 +127,35 @@ async def get_health_stats(admin_user: Any = Depends(require_admin)):
         "verifications_today": verifications_today,
         "active_users_7d": active_users
     }
+
+@router.get("/organizations", response_model=List[OrganizationOut])
+async def list_organizations(admin_user: Any = Depends(require_admin)):
+    db = get_database()
+    orgs = await db.organizations.find().to_list(length=1000)
+    for org in orgs:
+        org["id"] = str(org["_id"])
+    return orgs
+
+class OrganizationUpdate(BaseModel):
+    plan: str
+    max_certs: int
+
+@router.patch("/organizations/{org_id}", response_model=OrganizationOut)
+async def update_organization(org_id: str, payload: OrganizationUpdate, admin_user: Any = Depends(require_admin)):
+    db = get_database()
+    if not ObjectId.is_valid(org_id):
+        raise HTTPException(status_code=400, detail="Invalid organization ID")
+        
+    update_data = {"plan": payload.plan, "max_certs": payload.max_certs}
+    
+    result = await db.organizations.find_one_and_update(
+        {"_id": ObjectId(org_id)},
+        {"$set": update_data},
+        return_document=True
+    )
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Organization not found")
+        
+    result["id"] = str(result["_id"])
+    return result
