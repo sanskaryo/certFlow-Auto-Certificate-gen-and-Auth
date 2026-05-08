@@ -84,10 +84,10 @@ export function mergeCertificateLayout(
     recipientName: { ...base.recipientName, ...p?.recipientName },
     bodyBlock: { ...base.bodyBlock, ...p?.bodyBlock },
     qr: { ...base.qr, ...p?.qr },
-    logo2: p?.logo2,
-    logo3: p?.logo3,
-    watermark: p?.watermark,
-    theme: p?.theme,
+    logo2: p?.logo2 !== undefined ? { ...base.logo2, ...p.logo2 } : base.logo2,
+    logo3: p?.logo3 !== undefined ? { ...base.logo3, ...p.logo3 } : base.logo3,
+    watermark: p?.watermark !== undefined ? { ...base.watermark, ...p.watermark } : base.watermark,
+    theme: p?.theme !== undefined ? { ...base.theme, ...p.theme } : base.theme,
   };
 }
 

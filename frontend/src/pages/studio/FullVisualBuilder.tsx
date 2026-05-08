@@ -301,6 +301,7 @@ export default function FullVisualBuilder({
   if (!previewData) return <div className="p-8 text-center text-gray-500">Loading editor...</div>;
 
   const layout = previewData.certificateLayout;
+  // y is stored as fraction-from-bottom (0=bottom, 1=top) — invert for CSS `top`
   const logoTopPct = (1 - previewData.logoPos.y) * 100;
 
   const getElementStyle = (isSelected: boolean) => {
@@ -359,6 +360,40 @@ export default function FullVisualBuilder({
             >
               <img src={previewData.logoUrl} alt="Logo" className="w-full object-contain pointer-events-none" draggable={false} />
               {selectedElement === 'logo' && <ResizeHandle onStart={e => startResize('logo', e)} />}
+            </div>
+          )}
+
+          {/* Secondary Logo (logo2) */}
+          {previewData.logo2Url && layout.logo2 && !layout.logo2.hidden && (
+            <div
+              className={getElementStyle(selectedElement === 'logo2')}
+              style={{
+                left: `${layout.logo2.x * 100}%`,
+                top: `${(1 - layout.logo2.y) * 100}%`,
+                width: `${layout.logo2.size * 100}%`,
+              }}
+              onPointerDown={e => startDrag('logo2', e)}
+            >
+              <img src={previewData.logo2Url} alt="Secondary Logo" className="w-full object-contain pointer-events-none" draggable={false} />
+              {selectedElement === 'logo2' && <ResizeHandle onStart={e => startResize('logo2', e)} />}
+            </div>
+          )}
+
+          {/* Watermark */}
+          {previewData.watermarkUrl && layout.watermark && !layout.watermark.hidden && (
+            <div
+              className={getElementStyle(selectedElement === 'watermark')}
+              style={{
+                left: `${layout.watermark.x * 100}%`,
+                top: `${(1 - layout.watermark.y) * 100}%`,
+                width: `${layout.watermark.size * 100}%`,
+                opacity: layout.watermark.opacity ?? 0.15,
+                pointerEvents: 'auto',
+              }}
+              onPointerDown={e => startDrag('watermark', e)}
+            >
+              <img src={previewData.watermarkUrl} alt="Watermark" className="w-full object-contain pointer-events-none" draggable={false} />
+              {selectedElement === 'watermark' && <ResizeHandle onStart={e => startResize('watermark', e)} />}
             </div>
           )}
 
