@@ -7,6 +7,7 @@ CertFlow is a full-stack certificate generation and verification platform with s
 ## Features
 
 ### Certificate Generation
+
 - Manual single certificate generation with role-aware wording
 - Manual bulk entry (paste Name, Email, Role — one per line)
 - CSV participant upload with background processing
@@ -14,6 +15,7 @@ CertFlow is a full-stack certificate generation and verification platform with s
 - ZIP download of all certificates for an event
 
 ### Templates
+
 - 18 built-in certificate templates suited for different event types:
   - `classic-blue`, `emerald-clean`, `sunset-gold`, `royal-purple`, `modern-cyan`
   - `noir-luxe`, `hackathon-neon`, `tech-dark`, `traditional-elegant`
@@ -23,6 +25,7 @@ CertFlow is a full-stack certificate generation and verification platform with s
 - Custom template upload (PDF/image)
 
 ### Branding & Layout
+
 - Logo upload with **drag-and-drop position editor** — place the logo anywhere on the certificate canvas
 - Logo size slider (5%–40% of certificate width)
 - Preset positions: Top Left, Top Center, Top Right, Bottom Left
@@ -31,33 +34,39 @@ CertFlow is a full-stack certificate generation and verification platform with s
 - All branding persisted per event
 
 ### QR & Verification
+
 - QR code embedded on every certificate (1.4 inch, with "Scan to verify" label)
 - Public verification via `/verify/{cert_id}` or `/verify/hash/{hash}`
 - Hash integrity check (SHA-256, supports v1 and v2 formats)
 - Track open, share, and verify events per certificate
 
 ### Email
+
 - HTML email with branded layout, certificate preview card, and LinkedIn button
 - PDF attached automatically
 - Exponential backoff retry (3 attempts: 1s, 2s delay)
 - Falls back gracefully if SMTP is not configured
 
 ### Bulk Progress Tracking
+
 - Background bulk generation updates a `bulk_progress` field on the event in real time
 - Tracks: total, done, failed, status (`running` / `done`)
 
 ### Recipient Profiles
+
 - Public profile page at `/@username`
 - Shows all certificates with role badges (color-coded)
 - Search/filter by event, role, or organization
 - Copy link, Verify, and Add to LinkedIn buttons per certificate
 
 ### Team & Access Control
+
 - Role-based access: `admin`, `issuer`, `viewer`
 - Add/remove team members per event
 - API key generation (hashed) for external integrations
 
 ### Analytics
+
 - Per-event: issued, opened, shared, verified, emailed counts
 
 ---
@@ -158,6 +167,7 @@ Frontend: `http://localhost:5173`
 ## Core API Endpoints
 
 ### Auth
+
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/auth/register` | Register a new user |
@@ -165,6 +175,7 @@ Frontend: `http://localhost:5173`
 | GET | `/auth/me` | Get current user |
 
 ### Events
+
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/events/` | List all events for current user |
@@ -185,6 +196,7 @@ Frontend: `http://localhost:5173`
 | POST | `/events/{id}/certificates/{cert_id}/send-email` | Send certificate email |
 
 ### Verification (public)
+
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/verify/{cert_id}` | Verify certificate by ID |
@@ -195,6 +207,7 @@ Frontend: `http://localhost:5173`
 | GET | `/verify/public-stats` | Total orgs and certs issued |
 
 ### Profiles (public)
+
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/profiles/{username}` | Public credential profile |

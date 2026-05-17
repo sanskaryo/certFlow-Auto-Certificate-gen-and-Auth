@@ -95,7 +95,7 @@ def _merge_certificate_layout(layout_dict: dict | None) -> dict[str, Any]:
         "recipientName": {"x": 0.5, "y": 0.4, "scale": 1.0},
         "bodyBlock": {"x": 0.5, "y": 0.52, "scale": 1.0},
         "qr": {"x": 0.82, "y": 0.7, "size": 0.12},
-        "logo2": {"x": 0.82, "y": 0.05, "size": 0.12},
+        "logo2": {"x": 0.72, "y": 0.88, "size": 0.15},
         "logo3": {"x": 0.05, "y": 0.82, "size": 0.12},
         "watermark": {"x": 0.35, "y": 0.35, "size": 0.3, "opacity": 0.15},
     }
@@ -600,8 +600,19 @@ def _generate_standalone_pdf(
         if not os.path.exists(logo_path):
              logo_path = os.path.abspath(os.path.join("uploads", os.path.basename(logo_path)))
 
+    def _resolve_path(p: str) -> str:
+        """Try absolute path first, fall back to uploads/ basename."""
+        if p and os.path.exists(p):
+            return p
+        fallback = os.path.abspath(os.path.join("uploads", os.path.basename(p)))
+        return fallback if (p and os.path.exists(fallback)) else (p or "")
+
     def draw_logo_pos(l_path, pos_conf, is_watermark=False):
-        if not l_path or not os.path.exists(l_path): return
+        # Resolve path with fallback (same as primary logo)
+        l_path = _resolve_path(l_path) if l_path else ""
+        if not l_path or not os.path.exists(l_path):
+            logger.warning(f"Logo file not found, skipping: {l_path}")
+            return
         if pos_conf.get("hidden"): return
         try:
             size_frac = float(pos_conf.get("size", 0.25))   # fraction of cert width
@@ -620,12 +631,14 @@ def _generate_standalone_pdf(
             opacity = float(pos_conf.get("opacity", 1.0))
             if is_watermark and "opacity" not in pos_conf: opacity = 0.15
             logo_x = width * x_frac
-            logo_y = height * y_frac - logo_h
+            # y_frac is fraction-from-bottom (0=bottom, 1=top).
+            # Place the TOP of the logo at y_frac*height from the bottom,
+            # so the logo occupies [logo_y, logo_y + logo_h].
+            # Clamp so the logo never goes below y=0 (off-page).
+            logo_y = max(0.0, height * y_frac - logo_h)
 
             c.saveState()
             if opacity < 1.0:
-                # Need to use graphics state for alpha, not easily supported in base reportlab primitives without platypus or specialized pdfgen state. We'll simply ignore opacity unless we use fill stroke Alpha.
-                # Since reportlab doesn't easily set alpha of an image via drawImage (unless embedded in drawing), we'll do a simple trick if possible.
                 c.setFillAlpha(opacity)
                 c.setStrokeAlpha(opacity)
 
@@ -642,16 +655,28 @@ def _generate_standalone_pdf(
                 c.clipPath(p, stroke=0, fill=0)
 
             c.drawImage(l_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, mask='auto')
+            logger.info(f"Drew logo from {l_path} at x={logo_x:.1f} y={logo_y:.1f}")
             c.restoreState()
         except Exception as e:
-            logger.error(f"Failed to draw logo: {e}")
+            logger.error(f"Failed to draw logo {l_path}: {e}")
 
     draw_logo_pos(logo_path, logo_position or {})
-    
+
     extra_logos = event.get("additional_logos", {}) if isinstance(event, dict) else {}
-    if L.get("logo2") and extra_logos.get("logo2"): draw_logo_pos(extra_logos["logo2"], L["logo2"])
-    if L.get("logo3") and extra_logos.get("logo3"): draw_logo_pos(extra_logos["logo3"], L["logo3"])
-    if L.get("watermark") and extra_logos.get("watermark"): draw_logo_pos(extra_logos["watermark"], L["watermark"], is_watermark=True)
+    logo2_path = extra_logos.get("logo2", "")
+    logo3_path = extra_logos.get("logo3", "")
+    wm_path    = extra_logos.get("watermark", "")
+    # Draw additional logos unconditionally if a file path exists;
+    # use layout positions (with safe defaults so the logo stays on page).
+    if logo2_path:
+        l2_conf = dict(L.get("logo2") or {"x": 0.72, "y": 0.88, "size": 0.15})
+        draw_logo_pos(logo2_path, l2_conf)
+    if logo3_path:
+        l3_conf = dict(L.get("logo3") or {"x": 0.05, "y": 0.82, "size": 0.12})
+        draw_logo_pos(logo3_path, l3_conf)
+    if wm_path:
+        wm_conf = dict(L.get("watermark") or {"x": 0.35, "y": 0.55, "size": 0.3, "opacity": 0.15})
+        draw_logo_pos(wm_path, wm_conf, is_watermark=True)
 
     # Signature + Authority — stacked cleanly: image → line → name → position
     if signature_path:

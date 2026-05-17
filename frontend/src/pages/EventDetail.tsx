@@ -363,9 +363,29 @@ export default function EventDetail() {
     }
   }, [state.step, dispatch]);
 
+  // ── Save layout to server (called before generation to sync positions) ───
+  const saveCertificateLayout = useCallback(async () => {
+    if (!id) return;
+    try {
+      await fetch(`${API}/events/${id}/certificate-layout`, {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          certificate_layout: state.certificateLayout,
+          logo_position: state.branding.logoPos,
+        }),
+      });
+    } catch {
+      // Non-fatal — generation can still proceed with whatever is saved
+    }
+  }, [id, authHeaders, state.certificateLayout, state.branding.logoPos]);
+
   // ── Generation ────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async () => {
     if (!id) return;
+    // Always sync layout & logo positions to server before generating
+    // so any changes made in the wizard (LogoPositioner etc.) are reflected in the PDF.
+    await saveCertificateLayout();
     setIsGenerating(true);
     dispatch({ type: 'SET_GENERATION_STATUS', status: 'generating' });
 
@@ -472,7 +492,7 @@ export default function EventDetail() {
     } finally {
       setIsGenerating(false);
     }
-  }, [id, state, eventData, authHeaders, dispatch, notify]);
+  }, [id, state, eventData, authHeaders, dispatch, notify, saveCertificateLayout]);
 
   // ── Download ZIP ──────────────────────────────────────────────────────────
   const downloadZip = useCallback(async () => {

@@ -64,7 +64,7 @@ export const DEFAULT_CERTIFICATE_LAYOUT: CertificateLayout = {
   recipientName: { x: 0.5, y: 0.4, scale: 1 },
   bodyBlock: { x: 0.5, y: 0.52, scale: 1 },
   qr: { x: 0.82, y: 0.7, size: 0.12 },
-  logo2: { x: 0.82, y: 0.05, size: 0.12 },
+  logo2: { x: 0.72, y: 0.88, size: 0.15 },
   logo3: { x: 0.05, y: 0.82, size: 0.12 },
   watermark: { x: 0.35, y: 0.35, size: 0.3, opacity: 0.15 },
 };

@@ -249,7 +249,7 @@ export default function BrandingStep({
              <div className="p-4 border-t border-gray-100">
                 <LogoPositioner
                   logoUrl={branding.logo2Url || null}
-                  initial={{ ...(certificateLayout.logo2 || { x: 0.82, y: 0.05, size: 0.12 }) }}
+                  initial={{ ...(certificateLayout.logo2 || { x: 0.72, y: 0.88, size: 0.15 }) }}
                   onChange={pos => onLayoutPatch({ logo2: pos })}
                   onSave={pos => onLayoutPatch({ logo2: pos })}
                 />

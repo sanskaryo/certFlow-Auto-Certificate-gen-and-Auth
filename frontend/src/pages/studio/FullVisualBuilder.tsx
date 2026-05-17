@@ -321,22 +321,31 @@ export default function FullVisualBuilder({
       <div
         className="flex-1 relative overflow-auto bg-gray-100 flex items-center justify-center p-8"
         onPointerDown={(e) => {
-          // Only deselect if the click landed directly on this wrapper (not a child element)
           if (e.target === e.currentTarget) setSelectedElement(null);
         }}
       >
         <div
           ref={wrapRef}
-          className="relative shadow-2xl transition-all"
+          className="relative shadow-2xl transition-all overflow-hidden"
           style={{
             width: '90%',
             maxWidth: '768px',
             maxHeight: '100%',
             aspectRatio: '794 / 561',
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            // Background: use template image if available, else a neutral fallback
+            backgroundColor: '#f8fafc',
             border: '1px solid #e2e8f0',
           }}
         >
+          {/* Real template background image */}
+          {previewData.templateUrl && (
+            <img
+              src={previewData.templateUrl}
+              alt="Template"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              style={{ zIndex: 0 }}
+            />
+          )}
           {/* Grid overlay */}
           {showGrid && (
             <div className="absolute inset-0 pointer-events-none z-50" style={{ opacity: 0.2 }}>
@@ -348,39 +357,56 @@ export default function FullVisualBuilder({
               ))}
             </div>
           )}
-          {previewData.logoUrl && (
+          {previewData.logoUrl ? (
             <div
               className={getElementStyle(selectedElement === 'logo')}
               style={{
                 left: `${previewData.logoPos.x * 100}%`,
                 top: `${logoTopPct}%`,
                 width: `${previewData.logoPos.size * 100}%`,
+                zIndex: 10,
               }}
               onPointerDown={e => startDrag('logo', e)}
             >
               <img src={previewData.logoUrl} alt="Logo" className="w-full object-contain pointer-events-none" draggable={false} />
               {selectedElement === 'logo' && <ResizeHandle onStart={e => startResize('logo', e)} />}
             </div>
+          ) : (
+            <div
+              className={`${getElementStyle(selectedElement === 'logo')} flex items-center justify-center border-2 border-dashed border-gray-300 rounded bg-white/60`}
+              style={{ left: `${previewData.logoPos.x * 100}%`, top: `${logoTopPct}%`, width: `${previewData.logoPos.size * 100}%`, minHeight: 40, zIndex: 10 }}
+              onPointerDown={e => startDrag('logo', e)}
+            >
+              <span className="text-[10px] text-gray-400 font-semibold">Logo 1</span>
+              {selectedElement === 'logo' && <ResizeHandle onStart={e => startResize('logo', e)} />}
+            </div>
           )}
 
           {/* Secondary Logo (logo2) */}
-          {previewData.logo2Url && layout.logo2 && !layout.logo2.hidden && (
+          {layout.logo2 && !layout.logo2.hidden && (
             <div
               className={getElementStyle(selectedElement === 'logo2')}
               style={{
                 left: `${layout.logo2.x * 100}%`,
                 top: `${(1 - layout.logo2.y) * 100}%`,
                 width: `${layout.logo2.size * 100}%`,
+                zIndex: 10,
               }}
               onPointerDown={e => startDrag('logo2', e)}
             >
-              <img src={previewData.logo2Url} alt="Secondary Logo" className="w-full object-contain pointer-events-none" draggable={false} />
+              {previewData.logo2Url ? (
+                <img src={previewData.logo2Url} alt="Secondary Logo" className="w-full object-contain pointer-events-none" draggable={false} />
+              ) : (
+                <div className="w-full flex items-center justify-center border-2 border-dashed border-blue-300 rounded bg-blue-50/40" style={{ minHeight: 36 }}>
+                  <span className="text-[10px] text-blue-400 font-semibold">Logo 2</span>
+                </div>
+              )}
               {selectedElement === 'logo2' && <ResizeHandle onStart={e => startResize('logo2', e)} />}
             </div>
           )}
 
           {/* Watermark */}
-          {previewData.watermarkUrl && layout.watermark && !layout.watermark.hidden && (
+          {layout.watermark && !layout.watermark.hidden && (
             <div
               className={getElementStyle(selectedElement === 'watermark')}
               style={{
@@ -388,11 +414,17 @@ export default function FullVisualBuilder({
                 top: `${(1 - layout.watermark.y) * 100}%`,
                 width: `${layout.watermark.size * 100}%`,
                 opacity: layout.watermark.opacity ?? 0.15,
-                pointerEvents: 'auto',
+                zIndex: 10,
               }}
               onPointerDown={e => startDrag('watermark', e)}
             >
-              <img src={previewData.watermarkUrl} alt="Watermark" className="w-full object-contain pointer-events-none" draggable={false} />
+              {previewData.watermarkUrl ? (
+                <img src={previewData.watermarkUrl} alt="Watermark" className="w-full object-contain pointer-events-none" draggable={false} />
+              ) : (
+                <div className="w-full flex items-center justify-center border-2 border-dashed border-purple-300 rounded bg-purple-50/40" style={{ minHeight: 36 }}>
+                  <span className="text-[10px] text-purple-400 font-semibold">Watermark</span>
+                </div>
+              )}
               {selectedElement === 'watermark' && <ResizeHandle onStart={e => startResize('watermark', e)} />}
             </div>
           )}
